@@ -1,0 +1,86 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>Outsourced Computation Demo</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header class="header">
+        <h1>Outsourced Computation</h1>
+        <div id="banner" class="banner"></div>
+      </header>
+
+      <section class="card">
+        <h2>Step 1: Deploy Contract</h2>
+        <button id="btnDeploy" class="primary">Deploy</button>
+        <div id="deployOut" class="out"></div>
+      </section>
+
+      <section class="card">
+        <h2>Step 2: Client Creates Problem</h2>
+        <div class="grid">
+          <label>
+            Description
+            <input id="description" type="text" value="Compute square of 5" />
+          </label>
+          <label>
+            Reward (ETH)
+            <input id="rewardEth" type="number" step="0.01" value="0.05" />
+          </label>
+        </div>
+        <button id="btnCreateTask" class="primary">Create Task</button>
+        <div id="createTaskOut" class="out"></div>
+      </section>
+
+      <section class="card">
+        <h2>Step 3: Contractors Submit Results</h2>
+        <div class="grid">
+          <label>
+            Number of contractors
+            <input id="numContractors" type="number" value="5" />
+          </label>
+        </div>
+
+        <div id="contractorInputs" class="tableWrap">
+          <p id="contractorPlurality" class="pluralityPreview" hidden aria-live="polite"></p>
+          <table class="contractorTable">
+            <thead>
+              <tr>
+                <th>Contractor</th>
+                <th>Submitted number (value)</th>
+              </tr>
+            </thead>
+            <tbody id="contractorTableBody"></tbody>
+          </table>
+        </div>
+        <button id="btnSubmit" class="primary">Submit from Contractors</button>
+        <div id="submitOut" class="out"></div>
+      </section>
+
+      <section class="card">
+        <h2>Step 4: Finalize (Majority Vote + Transfers)</h2>
+        <button id="btnFinalize" class="primary">Finalize Task</button>
+        <div id="finalizeOut" class="out"></div>
+      </section>
+
+      <section class="card">
+        <h2>Step 5: Decrypt Winning Result (Off-chain)</h2>
+        <button id="btnDecrypt" class="primary">Decrypt Winning Ciphertext</button>
+        <div id="decryptOut" class="out"></div>
+      </section>
+
+      <footer class="footer">
+        <p>
+          Note: this UI runs a local Hardhat chain. Gas/transfers come from tx receipts + balance deltas.
+        </p>
+      </footer>
+    </div>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
+

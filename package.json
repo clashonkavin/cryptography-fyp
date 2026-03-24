@@ -4,14 +4,18 @@
   "description": "Blockchain-based outsourced computation with pairing-free PKEET-LE inspired crypto",
   "scripts": {
     "compile": "hardhat compile",
+    "start": "node server/index.js",
+    "dev": "node server/index.js",
     "simulate": "hardhat run scripts/simulate.js",
     "test": "hardhat test"
   },
   "dependencies": {
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",
     "bn.js": "^5.2.1",
+    "cors": "^2.8.6",
     "elliptic": "^6.5.4",
     "ethers": "^6.9.0",
+    "express": "^5.2.1",
     "hardhat": "^2.19.4"
   }
 }
