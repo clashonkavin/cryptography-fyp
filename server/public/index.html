@@ -10,7 +10,7 @@
   <body>
     <div class="container">
       <header class="header">
-        <h1>Outsourced Computation</h1>
+        <h1>Outsourced Computation (Dual-Scheme Compare)</h1>
         <div id="banner" class="banner"></div>
       </header>
 
@@ -64,6 +64,27 @@
       <section class="card">
         <h2>Step 4: Finalize (Majority Vote + Transfers)</h2>
         <button id="btnFinalize" class="primary">Finalize Task</button>
+        <div id="gasComparePanel" class="gasCompare" hidden>
+          <h3>Total Gas Comparison</h3>
+          <div class="gasGrid">
+            <div class="gasBox">
+              <div class="gasLabel">New Scheme (Pairing-free)</div>
+              <div id="gasNewTotal" class="gasValue">-</div>
+            </div>
+            <div class="gasBox">
+              <div class="gasLabel">Original Scheme (Pairing-based)</div>
+              <div id="gasOldTotal" class="gasValue">-</div>
+            </div>
+            <div class="gasBox">
+              <div class="gasLabel">Delta (Original - New)</div>
+              <div id="gasDelta" class="gasValue">-</div>
+            </div>
+            <div class="gasBox">
+              <div class="gasLabel">Original/New Ratio</div>
+              <div id="gasRatio" class="gasValue">-</div>
+            </div>
+          </div>
+        </div>
         <div id="finalizeOut" class="out"></div>
       </section>
 
@@ -75,7 +96,7 @@
 
       <footer class="footer">
         <p>
-          Note: this UI runs a local Hardhat chain. Gas/transfers come from tx receipts + balance deltas.
+          Note: this UI runs both new (pairing-free) and old (pairing-based) schemes on a local Hardhat chain and compares total gas.
         </p>
       </footer>
     </div>

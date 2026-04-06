@@ -48,6 +48,11 @@ const els = {
 
   btnFinalize: $("btnFinalize"),
   finalizeOut: $("finalizeOut"),
+  gasComparePanel: $("gasComparePanel"),
+  gasNewTotal: $("gasNewTotal"),
+  gasOldTotal: $("gasOldTotal"),
+  gasDelta: $("gasDelta"),
+  gasRatio: $("gasRatio"),
 
   btnDecrypt: $("btnDecrypt"),
   decryptOut: $("decryptOut"),
@@ -194,6 +199,11 @@ function resetStepOutputs() {
   els.contractorTableBody.replaceChildren();
   els.contractorPlurality.textContent = "";
   els.contractorPlurality.hidden = true;
+  if (els.gasComparePanel) els.gasComparePanel.hidden = true;
+  if (els.gasNewTotal) els.gasNewTotal.textContent = "-";
+  if (els.gasOldTotal) els.gasOldTotal.textContent = "-";
+  if (els.gasDelta) els.gasDelta.textContent = "-";
+  if (els.gasRatio) els.gasRatio.textContent = "-";
   state.contractorValues = [];
 }
 
@@ -280,8 +290,10 @@ els.btnSubmit.addEventListener("click", async () => {
       Address: s.contractorAddress.slice(0, 10) + "...",
       Value: s.submittedValue,
       OffchainProofValid: s.offChainProofValid ? "true" : "false",
-      OnchainProofValid: s.onChainProofValid ? "true" : "false",
-      GasCostETH: s.gas.gasCostEth ?? "",
+      OnchainProofValidNew: s.onChainProofValid ? "true" : "false",
+      OnchainProofValidOld: s.onChainProofValidOld ? "true" : "false",
+      GasCostETH_New: s.gas.newScheme?.gasCostEth ?? "",
+      GasCostETH_Old: s.gas.oldScheme?.gasCostEth ?? "",
       BalanceDeltaETH: s.balanceDeltaEth,
       C4: s.debug.C4,
       TxHash: (s.submitTxHash || "").slice(0, 14) + "...",
@@ -323,6 +335,19 @@ els.btnFinalize.addEventListener("click", async () => {
       RewardAmountETH: c.rewardAmountEth ?? "",
     }));
 
+    const cmp = out.gasComparison || {};
+    const newTotal = cmp?.newScheme?.totalGas ?? "-";
+    const oldTotal = cmp?.oldScheme?.totalGas ?? "-";
+    const delta = cmp?.deltaGas ?? "-";
+    const ratio =
+      typeof cmp?.ratioOldToNew === "number" ? `${cmp.ratioOldToNew.toFixed(4)}x` : "-";
+    const fmt = (v) => (typeof v === "string" ? Number(v).toLocaleString("en-US") : String(v));
+    if (els.gasComparePanel) els.gasComparePanel.hidden = false;
+    if (els.gasNewTotal) els.gasNewTotal.textContent = fmt(newTotal);
+    if (els.gasOldTotal) els.gasOldTotal.textContent = fmt(oldTotal);
+    if (els.gasDelta) els.gasDelta.textContent = fmt(delta);
+    if (els.gasRatio) els.gasRatio.textContent = ratio;
+
     els.finalizeOut.innerHTML =
       `<pre style="white-space:pre-wrap;color:inherit;margin-top:10px;">${JSON.stringify(
         {
@@ -330,6 +355,7 @@ els.btnFinalize.addEventListener("click", async () => {
           totalSubmissions: out.totalSubmissions,
           finalizeReceipt: out.finalizeReceipt,
           winningC4: out.winningC4,
+          gasComparison: out.gasComparison,
           contractBalanceDeltaEth: out.contractBalanceDeltaEth,
           contractors: contractorRows,
         },

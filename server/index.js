@@ -127,6 +127,7 @@ async function main() {
 function runForUI(run) {
   return {
     contractAddress: run.contractAddress,
+    contractAddresses: run.contractAddresses,
     clientAddress: run.clientAddress,
     contractorAddresses: run.contractorAddresses,
     deployReceipt: run.deployReceipt,

@@ -16,7 +16,6 @@ import "./lib/BytesUtils.sol";
  *   - Proof: Schnorr PoK of r  =>  (R, z) s.t. g^z == R * C1^e
  */
 contract OutsourcedComputation {
-
     // ─────────────────────────────────────────────────────────────────────────
     // Data structures
     // ─────────────────────────────────────────────────────────────────────────
@@ -24,25 +23,25 @@ contract OutsourcedComputation {
     struct Task {
         uint256 id;
         address client;
-        string  description;
+        string description;
         uint256 reward;
-        bool    finalized;
-        bytes   winningC1;
-        bytes   winningC2;
-        bytes   winningC4;
+        bool finalized;
+        bytes winningC1;
+        bytes winningC2;
+        bytes winningC4;
         uint256 submissionCount;
     }
 
     struct Submission {
         address contractor;
-        bytes   C1;          // g^r  (compressed point, 33 bytes)
-        bytes   C2;          // M * pk_d^r  (compressed point, 33 bytes)
-        bytes   C4;          // equality tag (compressed point, 33 bytes)
-        bytes   R;           // Schnorr nonce commitment (compressed point, 33 bytes)
-        bytes   zBytes;      // Schnorr response scalar (32 bytes)
-        bytes   pkE;         // contractor's public key (compressed, 33 bytes)
-        bool    verified;
-        bool    rewarded;
+        bytes C1; // g^r  (compressed point, 33 bytes)
+        bytes C2; // M * pk_d^r  (compressed point, 33 bytes)
+        bytes C4; // equality tag (compressed point, 33 bytes)
+        bytes R; // Schnorr nonce commitment (compressed point, 33 bytes)
+        bytes zBytes; // Schnorr response scalar (32 bytes)
+        bytes pkE; // contractor's public key (compressed, 33 bytes)
+        bool verified;
+        bool rewarded;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -58,22 +57,44 @@ contract OutsourcedComputation {
     // Events
     // ─────────────────────────────────────────────────────────────────────────
 
-    event TaskCreated(uint256 indexed taskId, address indexed client, string description, uint256 reward);
-    event ResultSubmitted(uint256 indexed taskId, address indexed contractor, uint256 submissionIndex, bool proofValid);
-    event TaskFinalized(uint256 indexed taskId, bytes winningC4, uint256 majorityCount, uint256 totalSubmissions);
-    event ContractorRewarded(uint256 indexed taskId, address indexed contractor, uint256 amount);
-    event ContractorRejected(uint256 indexed taskId, address indexed contractor, string reason);
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // 1. Create Task
-    // ─────────────────────────────────────────────────────────────────────────
+    event TaskCreated(
+        uint256 indexed taskId,
+        address indexed client,
+        string description,
+        uint256 reward
+    );
+    event ResultSubmitted(
+        uint256 indexed taskId,
+        address indexed contractor,
+        uint256 submissionIndex,
+        bool proofValid
+    );
+    event TaskFinalized(
+        uint256 indexed taskId,
+        bytes winningC4,
+        uint256 majorityCount,
+        uint256 totalSubmissions
+    );
+    event ContractorRewarded(
+        uint256 indexed taskId,
+        address indexed contractor,
+        uint256 amount
+    );
+    event ContractorRejected(
+        uint256 indexed taskId,
+        address indexed contractor,
+        string reason
+    );
 
     /**
      * @notice Client posts a computation task and deposits the reward.
      * @param description  Human-readable description (e.g. "Compute square of 5")
      * @param reward       Reward amount (must match msg.value)
      */
-    function createTask(string memory description, uint256 reward) public payable returns (uint256) {
+    function createTask(
+        string memory description,
+        uint256 reward
+    ) public payable returns (uint256) {
         require(msg.value == reward, "msg.value must equal reward");
         require(reward > 0, "Reward must be > 0");
 
@@ -93,10 +114,6 @@ contract OutsourcedComputation {
         emit TaskCreated(taskId, msg.sender, description, reward);
         return taskId;
     }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // 2. Submit Result
-    // ─────────────────────────────────────────────────────────────────────────
 
     /**
      * @notice Contractor submits encrypted result + Schnorr proof.
@@ -120,41 +137,43 @@ contract OutsourcedComputation {
         bytes memory pkE
     ) public {
         Task storage task = tasks[taskId];
-        require(task.id != 0,       "Task does not exist");
-        require(!task.finalized,    "Task already finalized");
-        require(C1.length == 33,    "C1 must be 33 bytes");
-        require(C2.length == 33,    "C2 must be 33 bytes");
-        require(C4.length == 33,    "C4 must be 33 bytes");
-        require(R.length  == 33,    "R must be 33 bytes");
-        require(zBytes.length == 32,"z must be 32 bytes");
-        require(pkE.length == 33,   "pkE must be 33 bytes");
+        require(task.id != 0, "Task does not exist");
+        require(!task.finalized, "Task already finalized");
+        require(C1.length == 33, "C1 must be 33 bytes");
+        require(C2.length == 33, "C2 must be 33 bytes");
+        require(C4.length == 33, "C4 must be 33 bytes");
+        require(R.length == 33, "R must be 33 bytes");
+        require(zBytes.length == 32, "z must be 32 bytes");
+        require(pkE.length == 33, "pkE must be 33 bytes");
 
         // Verify Schnorr proof: g^z == R * C1^e
         bool valid = SchnorrVerifier.verifySchnorr(C1, C2, C4, R, zBytes, pkE);
 
         uint256 idx = submissions[taskId].length;
-        submissions[taskId].push(Submission({
-            contractor: msg.sender,
-            C1: C1,
-            C2: C2,
-            C4: C4,
-            R: R,
-            zBytes: zBytes,
-            pkE: pkE,
-            verified: valid,
-            rewarded: false
-        }));
+        submissions[taskId].push(
+            Submission({
+                contractor: msg.sender,
+                C1: C1,
+                C2: C2,
+                C4: C4,
+                R: R,
+                zBytes: zBytes,
+                pkE: pkE,
+                verified: valid,
+                rewarded: false
+            })
+        );
         task.submissionCount++;
 
         if (!valid) {
-            emit ContractorRejected(taskId, msg.sender, "Invalid Schnorr proof");
+            emit ContractorRejected(
+                taskId,
+                msg.sender,
+                "Invalid Schnorr proof"
+            );
         }
         emit ResultSubmitted(taskId, msg.sender, idx, valid);
     }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // 3. Finalize Task
-    // ─────────────────────────────────────────────────────────────────────────
 
     /**
      * @notice Groups verified submissions by C4 (equality tag), picks the majority,
@@ -163,7 +182,7 @@ contract OutsourcedComputation {
      */
     function finalizeTask(uint256 taskId) public {
         Task storage task = tasks[taskId];
-        require(task.id != 0,    "Task does not exist");
+        require(task.id != 0, "Task does not exist");
         require(!task.finalized, "Already finalized");
         require(msg.sender == task.client, "Only client can finalize");
 
@@ -175,60 +194,66 @@ contract OutsourcedComputation {
         // O(n^2) — acceptable for small n (5–20 contractors)
         bytes memory winC4;
         uint256 winCount = 0;
-        uint256 winIdx   = type(uint256).max;
+        uint256 winIdx = type(uint256).max;
 
         for (uint256 i = 0; i < n; i++) {
             if (!subs[i].verified) continue;
             uint256 cnt = 0;
             for (uint256 j = 0; j < n; j++) {
-                if (subs[j].verified && BytesUtils.bytesEqual(subs[i].C4, subs[j].C4)) {
+                if (
+                    subs[j].verified &&
+                    BytesUtils.bytesEqual(subs[i].C4, subs[j].C4)
+                ) {
                     cnt++;
                 }
             }
             if (cnt > winCount) {
                 winCount = cnt;
-                winC4    = subs[i].C4;
-                winIdx   = i;
+                winC4 = subs[i].C4;
+                winIdx = i;
             }
         }
 
         require(winCount > 0, "No valid submissions found");
 
         // ── Store winning ciphertext ──────────────────────────────────────
-        task.winningC1  = subs[winIdx].C1;
-        task.winningC2  = subs[winIdx].C2;
-        task.winningC4  = winC4;
-        task.finalized  = true;
+        task.winningC1 = subs[winIdx].C1;
+        task.winningC2 = subs[winIdx].C2;
+        task.winningC4 = winC4;
+        task.finalized = true;
 
         // ── Reward winning contractors ────────────────────────────────────
         uint256 perContractor = task.reward / winCount;
 
         for (uint256 i = 0; i < n; i++) {
             Submission storage s = subs[i];
-            if (s.verified && BytesUtils.bytesEqual(s.C4, winC4) && !s.rewarded) {
+            if (
+                s.verified && BytesUtils.bytesEqual(s.C4, winC4) && !s.rewarded
+            ) {
                 s.rewarded = true;
-                (bool sent, ) = payable(s.contractor).call{value: perContractor}("");
+                (bool sent, ) = payable(s.contractor).call{
+                    value: perContractor
+                }("");
                 require(sent, "ETH transfer failed");
                 emit ContractorRewarded(taskId, s.contractor, perContractor);
             } else if (s.verified && !BytesUtils.bytesEqual(s.C4, winC4)) {
-                emit ContractorRejected(taskId, s.contractor, "Minority result");
+                emit ContractorRejected(
+                    taskId,
+                    s.contractor,
+                    "Minority result"
+                );
             }
         }
 
         emit TaskFinalized(taskId, winC4, winCount, n);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // 4. View Result
-    // ─────────────────────────────────────────────────────────────────────────
-
     /**
      * @notice Returns the winning ciphertext (C1, C2) so the client can decrypt.
      */
-    function getWinningCiphertext(uint256 taskId)
-        public view
-        returns (bytes memory C1, bytes memory C2, bytes memory C4)
-    {
+    function getWinningCiphertext(
+        uint256 taskId
+    ) public view returns (bytes memory C1, bytes memory C2, bytes memory C4) {
         Task storage task = tasks[taskId];
         require(task.finalized, "Task not yet finalized");
         return (task.winningC1, task.winningC2, task.winningC4);
@@ -241,8 +266,12 @@ contract OutsourcedComputation {
         return submissions[taskId].length;
     }
 
-    function getSubmission(uint256 taskId, uint256 idx)
-        public view
+    function getSubmission(
+        uint256 taskId,
+        uint256 idx
+    )
+        public
+        view
         returns (
             address contractor,
             bytes memory C1,

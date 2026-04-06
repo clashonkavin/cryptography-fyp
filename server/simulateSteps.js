@@ -1,7 +1,8 @@
 const crypto = require("node:crypto");
 const { ethers } = require("ethers");
 
-const artifact = require("../artifacts/contracts/OutsourcedComputation.sol/OutsourcedComputation.json");
+const artifactNew = require("../artifacts/contracts/OutsourcedComputation.sol/OutsourcedComputation.json");
+const artifactOld = require("../artifacts/contracts/OutsourcedComputationPairing.sol/OutsourcedComputationPairing.json");
 const {
   generateKeyPair,
   encrypt,
@@ -83,29 +84,51 @@ async function stepDeploy({ provider, maxContractors = 10 }) {
   const contractorSigners = accounts.slice(1, 1 + maxContractors);
   const contractorAddresses = await Promise.all(contractorSigners.map((s) => s.getAddress()));
 
-  const factory = new ethers.ContractFactory(artifact.abi, artifact.bytecode, clientSigner);
-  const contract = await factory.deploy();
-  const deployTx = await contract.deploymentTransaction();
-  const receipt = await deployTx.wait();
+  const deployOne = async (label, artifact) => {
+    const factory = new ethers.ContractFactory(artifact.abi, artifact.bytecode, clientSigner);
+    const contract = await factory.deploy();
+    const deployTx = await contract.deploymentTransaction();
+    const receipt = await deployTx.wait();
+    const gasPrice = safeGetGasPrice(receipt);
+    const gasUsed = receipt.gasUsed ?? null;
+    const gasCostWei = gasPrice && gasUsed ? gasUsed * gasPrice : null;
+    return {
+      label,
+      contract,
+      contractAddress: await contract.getAddress(),
+      deployReceipt: {
+        txHash: receipt.hash,
+        gasUsed: gasUsed ? gasUsed.toString() : null,
+        gasPrice: gasPrice ? gasPrice.toString() : null,
+        gasCostEth: formatMaybeEther(gasCostWei),
+      },
+      totalGasUsed: gasUsed ? BigInt(gasUsed) : 0n,
+    };
+  };
 
-  const contractAddress = await contract.getAddress();
-  const gasPrice = safeGetGasPrice(receipt);
-  const gasUsed = receipt.gasUsed ?? null;
-  const gasCostWei = gasPrice && gasUsed ? gasUsed * gasPrice : null;
+  const [newScheme, oldScheme] = await Promise.all([
+    deployOne("newScheme", artifactNew),
+    deployOne("oldScheme", artifactOld),
+  ]);
 
   return {
     runId: crypto.randomUUID(),
-    contract,
-    contractAddress,
+    schemes: {
+      newScheme,
+      oldScheme,
+    },
+    contractAddress: newScheme.contractAddress,
+    contractAddresses: {
+      newScheme: newScheme.contractAddress,
+      oldScheme: oldScheme.contractAddress,
+    },
     clientAddress,
     contractorAddresses,
     contractorSigners,
     maxContractors,
     deployReceipt: {
-      txHash: receipt.hash,
-      gasUsed: gasUsed ? gasUsed.toString() : null,
-      gasPrice: gasPrice ? gasPrice.toString() : null,
-      gasCostEth: formatMaybeEther(gasCostWei),
+      newScheme: newScheme.deployReceipt,
+      oldScheme: oldScheme.deployReceipt,
     },
   };
 }
@@ -116,7 +139,9 @@ async function stepCreateTask({
   description,
   rewardEth,
 }) {
-  if (!run?.contract) throw new Error("Deploy the contract first");
+  if (!run?.schemes?.newScheme?.contract || !run?.schemes?.oldScheme?.contract) {
+    throw new Error("Deploy contracts first");
+  }
   if (!description || typeof description !== "string") throw new Error("description is required");
   if (!rewardEth) throw new Error("rewardEth is required");
 
@@ -126,36 +151,52 @@ async function stepCreateTask({
   // For UI transfer display, compute from rewardWei + tx gas cost.
   // (Balance-delta approach can be misleading depending on RPC/pending state.)
 
-  const tx = await run.contract
-    .connect(await provider.getSigner(run.clientAddress))
-    .createTask(description, rewardWei, { value: rewardWei });
-  const receipt = await tx.wait();
-
-  const events = parseEvents(run.contract, receipt.logs);
-  const taskCreatedEvt = events.find((e) => e && e.name === "TaskCreated");
-  const taskId = taskCreatedEvt ? taskCreatedEvt.args.taskId : null;
-  if (taskId === null) throw new Error("TaskCreated event not found");
-
-  const gasPrice = safeGetGasPrice(receipt);
-  const gasUsed = receipt.gasUsed ?? null;
-  const gasCostWei = gasPrice && gasUsed ? gasUsed * gasPrice : null;
+  const clientSigner = await provider.getSigner(run.clientAddress);
+  const runCreateTask = async (schemeKey) => {
+    const scheme = run.schemes[schemeKey];
+    const tx = await scheme.contract
+      .connect(clientSigner)
+      .createTask(description, rewardWei, { value: rewardWei });
+    const receipt = await tx.wait();
+    const events = parseEvents(scheme.contract, receipt.logs);
+    const taskCreatedEvt = events.find((e) => e && e.name === "TaskCreated");
+    const taskId = taskCreatedEvt ? taskCreatedEvt.args.taskId : null;
+    if (taskId === null) throw new Error(`TaskCreated event not found for ${schemeKey}`);
+    const gasPrice = safeGetGasPrice(receipt);
+    const gasUsed = receipt.gasUsed ?? null;
+    const gasCostWei = gasPrice && gasUsed ? gasUsed * gasPrice : null;
+    scheme.taskId = taskId;
+    scheme.totalGasUsed += gasUsed ? BigInt(gasUsed) : 0n;
+    return {
+      taskId: taskId.toString(),
+      receipt: {
+        txHash: receipt.hash,
+        gasUsed: gasUsed ? gasUsed.toString() : null,
+        gasPrice: gasPrice ? gasPrice.toString() : null,
+        gasCostEth: formatMaybeEther(gasCostWei),
+      },
+      gasCostWei,
+    };
+  };
+  const [newOut, oldOut] = await Promise.all([runCreateTask("newScheme"), runCreateTask("oldScheme")]);
 
   run.clientKeys = clientKeys;
-  run.taskId = taskId;
   run.rewardWei = rewardWei;
   run.description = description;
 
   return {
-    taskId: taskId.toString(),
+    taskId: newOut.taskId,
+    taskIds: {
+      newScheme: newOut.taskId,
+      oldScheme: oldOut.taskId,
+    },
     rewardEth: String(rewardEth),
     contractBalanceDeltaEth: ethers.formatEther(rewardWei),
     clientBalanceDeltaEth:
-      gasCostWei !== null ? ethers.formatEther(-(rewardWei + gasCostWei)) : null,
+      newOut.gasCostWei !== null ? ethers.formatEther(-(rewardWei + newOut.gasCostWei)) : null,
     createTaskReceipt: {
-      txHash: receipt.hash,
-      gasUsed: gasUsed ? gasUsed.toString() : null,
-      gasPrice: gasPrice ? gasPrice.toString() : null,
-      gasCostEth: formatMaybeEther(gasCostWei),
+      newScheme: newOut.receipt,
+      oldScheme: oldOut.receipt,
     },
   };
 }
@@ -165,7 +206,9 @@ async function stepSubmitContractors({
   run,
   contractorValues,
 }) {
-  if (!run?.contract || run.taskId === undefined) throw new Error("Create a task first");
+  if (!run?.schemes?.newScheme?.contract || !run?.schemes?.oldScheme?.contract) {
+    throw new Error("Create a task first");
+  }
   if (!Array.isArray(contractorValues) || contractorValues.length < 1) {
     throw new Error("contractorValues must be a non-empty array");
   }
@@ -201,40 +244,59 @@ async function stepSubmitContractors({
       conKeys.pkBytes
     );
 
-    const tx = await run.contract
-      .connect(signer)
-      .submitResult(
-        run.taskId,
+    const submitOne = async (schemeKey) => {
+      const scheme = run.schemes[schemeKey];
+      const data = scheme.contract.interface.encodeFunctionData("submitResult", [
+        scheme.taskId,
         cipher.C1,
         cipher.C2,
         cipher.C4,
         proof.R,
         proof.z,
-        conKeys.pkBytes
-      );
-    const receipt = await tx.wait();
-
-    const gasPrice = safeGetGasPrice(receipt);
-    const gasUsed = receipt.gasUsed ?? null;
-    const gasCostWei = gasPrice && gasUsed ? gasUsed * gasPrice : null;
+        conKeys.pkBytes,
+      ]);
+      const tx = await signer.sendTransaction({
+        to: await scheme.contract.getAddress(),
+        data,
+        gasLimit: 8_000_000n,
+      });
+      const receipt = await tx.wait();
+      const gasPrice = safeGetGasPrice(receipt);
+      const gasUsed = receipt.gasUsed ?? null;
+      const gasCostWei = gasPrice && gasUsed ? gasUsed * gasPrice : null;
+      const events = parseEvents(scheme.contract, receipt.logs);
+      const submittedEvt = events.find((e) => e && e.name === "ResultSubmitted");
+      const proofValidOnChain = submittedEvt ? submittedEvt.args.proofValid : false;
+      scheme.totalGasUsed += gasUsed ? BigInt(gasUsed) : 0n;
+      return {
+        txHash: receipt.hash,
+        gasUsed: gasUsed ? gasUsed.toString() : null,
+        gasCostEth: formatMaybeEther(gasCostWei),
+        onChainProofValid: Boolean(proofValidOnChain),
+      };
+    };
+    const [newSub, oldSub] = await Promise.all([submitOne("newScheme"), submitOne("oldScheme")]);
 
     const after = await provider.getBalance(addr);
     const balanceDeltaWei = after - before;
-
-    const events = parseEvents(run.contract, receipt.logs);
-    const submittedEvt = events.find((e) => e && e.name === "ResultSubmitted");
-    const proofValidOnChain = submittedEvt ? submittedEvt.args.proofValid : false;
 
     submissions.push({
       contractorIndex: i + 1,
       contractorAddress: addr,
       submittedValue: Number(value),
       offChainProofValid: offChainOk,
-      onChainProofValid: Boolean(proofValidOnChain),
-      submitTxHash: receipt.hash,
+      onChainProofValid: Boolean(newSub.onChainProofValid),
+      onChainProofValidOld: Boolean(oldSub.onChainProofValid),
+      submitTxHash: newSub.txHash,
       gas: {
-        gasUsed: gasUsed ? gasUsed.toString() : null,
-        gasCostEth: formatMaybeEther(gasCostWei),
+        newScheme: {
+          gasUsed: newSub.gasUsed,
+          gasCostEth: newSub.gasCostEth,
+        },
+        oldScheme: {
+          gasUsed: oldSub.gasUsed,
+          gasCostEth: oldSub.gasCostEth,
+        },
       },
       balanceDeltaEth: ethers.formatEther(balanceDeltaWei),
       debug: {
@@ -252,7 +314,9 @@ async function stepSubmitContractors({
 }
 
 async function stepFinalizeTask({ provider, run }) {
-  if (!run?.contract || run.taskId === undefined) throw new Error("Submit contractors first");
+  if (!run?.schemes?.newScheme?.contract || !run?.schemes?.oldScheme?.contract) {
+    throw new Error("Submit contractors first");
+  }
   if (!run?.contractorSigners) throw new Error("Missing contractor signers");
 
   const contractorSigners = run.contractorSigners;
@@ -262,39 +326,50 @@ async function stepFinalizeTask({ provider, run }) {
     : contractorSigners;
 
   const clientSigner = await provider.getSigner(run.clientAddress);
-
-  const tx = await run.contract.connect(clientSigner).finalizeTask(run.taskId);
-  const receipt = await tx.wait();
-
-  const events = parseEvents(run.contract, receipt.logs);
-  const taskFinalizedEvt = events.find((e) => e && e.name === "TaskFinalized");
-  const majorityCount = taskFinalizedEvt ? taskFinalizedEvt.args.majorityCount : null;
-  const totalSubmissions = taskFinalizedEvt ? taskFinalizedEvt.args.totalSubmissions : null;
-
-  const winningC4 = taskFinalizedEvt ? taskFinalizedEvt.args.winningC4 : null;
-
-  const rewardedEvents = events.filter((e) => e && e.name === "ContractorRewarded");
-  const rejectedEvents = events.filter((e) => e && e.name === "ContractorRejected");
-
-  const rewarded = new Map(); // addrLower -> amountWei
-  rewardedEvents.forEach((e) => rewarded.set(String(e.args.contractor).toLowerCase(), e.args.amount));
-
-  const rejected = new Map(); // addrLower -> reason
-  rejectedEvents.forEach((e) => rejected.set(String(e.args.contractor).toLowerCase(), e.args.reason));
-
-  const gasPrice = safeGetGasPrice(receipt);
-  const gasUsed = receipt.gasUsed ?? null;
-  const gasCostWei = gasPrice && gasUsed ? gasUsed * gasPrice : null;
-
-  const rewardedTotalWei = rewardedEvents.reduce((acc, e) => acc + BigInt(e.args.amount), 0n);
-  const contractBalanceDeltaEth = ethers.formatEther(-rewardedTotalWei);
-  const clientBalanceDeltaEth = gasCostWei !== null ? ethers.formatEther(-gasCostWei) : null;
+  const finalizeOne = async (schemeKey) => {
+    const scheme = run.schemes[schemeKey];
+    const data = scheme.contract.interface.encodeFunctionData("finalizeTask", [scheme.taskId]);
+    const tx = await clientSigner.sendTransaction({
+      to: await scheme.contract.getAddress(),
+      data,
+      gasLimit: 10_000_000n,
+    });
+    const receipt = await tx.wait();
+    const events = parseEvents(scheme.contract, receipt.logs);
+    const taskFinalizedEvt = events.find((e) => e && e.name === "TaskFinalized");
+    const rewardedEvents = events.filter((e) => e && e.name === "ContractorRewarded");
+    const rejectedEvents = events.filter((e) => e && e.name === "ContractorRejected");
+    const rewarded = new Map();
+    rewardedEvents.forEach((e) => rewarded.set(String(e.args.contractor).toLowerCase(), e.args.amount));
+    const rejected = new Map();
+    rejectedEvents.forEach((e) => rejected.set(String(e.args.contractor).toLowerCase(), e.args.reason));
+    const gasPrice = safeGetGasPrice(receipt);
+    const gasUsed = receipt.gasUsed ?? null;
+    const gasCostWei = gasPrice && gasUsed ? gasUsed * gasPrice : null;
+    const rewardedTotalWei = rewardedEvents.reduce((acc, e) => acc + BigInt(e.args.amount), 0n);
+    scheme.totalGasUsed += gasUsed ? BigInt(gasUsed) : 0n;
+    return {
+      majorityCount: taskFinalizedEvt ? taskFinalizedEvt.args.majorityCount : null,
+      totalSubmissions: taskFinalizedEvt ? taskFinalizedEvt.args.totalSubmissions : null,
+      winningC4: taskFinalizedEvt ? taskFinalizedEvt.args.winningC4 : null,
+      receipt: {
+        txHash: receipt.hash,
+        gasUsed: gasUsed ? gasUsed.toString() : null,
+        gasCostEth: formatMaybeEther(gasCostWei),
+        clientBalanceDeltaEth: gasCostWei !== null ? ethers.formatEther(-gasCostWei) : null,
+      },
+      contractBalanceDeltaEth: ethers.formatEther(-rewardedTotalWei),
+      rewarded,
+      rejected,
+    };
+  };
+  const [newOut, oldOut] = await Promise.all([finalizeOne("newScheme"), finalizeOne("oldScheme")]);
 
   // build per-contractor table from active contractor signers
   const results = activeContractorSigners.map((signer, idx) => {
     const addr = signer.address.toLowerCase();
-    const rewardAmountWei = rewarded.get(addr) ?? null;
-    const reason = rejected.get(addr) ?? null;
+    const rewardAmountWei = newOut.rewarded.get(addr) ?? null;
+    const reason = newOut.rejected.get(addr) ?? null;
     return {
       contractorIndex: idx + 1,
       contractorAddress: addr,
@@ -306,28 +381,47 @@ async function stepFinalizeTask({ provider, run }) {
     };
   });
 
-  run.winningC4 = winningC4;
+  run.winningC4 = newOut.winningC4;
+  run.totalGas = {
+    newScheme: run.schemes.newScheme.totalGasUsed,
+    oldScheme: run.schemes.oldScheme.totalGasUsed,
+  };
 
   return {
-    majorityCount: majorityCount !== null ? majorityCount.toString() : null,
-    totalSubmissions: totalSubmissions !== null ? totalSubmissions.toString() : null,
-    winningC4: winningC4 ? String(winningC4).slice(0, 16) + "..." : null,
+    majorityCount: newOut.majorityCount !== null ? newOut.majorityCount.toString() : null,
+    totalSubmissions: newOut.totalSubmissions !== null ? newOut.totalSubmissions.toString() : null,
+    winningC4: newOut.winningC4 ? String(newOut.winningC4).slice(0, 16) + "..." : null,
     finalizeReceipt: {
-      txHash: receipt.hash,
-      gasUsed: gasUsed ? gasUsed.toString() : null,
-      gasCostEth: formatMaybeEther(gasCostWei),
-      clientBalanceDeltaEth,
+      newScheme: newOut.receipt,
+      oldScheme: oldOut.receipt,
     },
-    contractBalanceDeltaEth,
+    contractBalanceDeltaEth: newOut.contractBalanceDeltaEth,
     contractors: results,
+    gasComparison: {
+      newScheme: {
+        totalGas: run.totalGas.newScheme.toString(),
+      },
+      oldScheme: {
+        totalGas: run.totalGas.oldScheme.toString(),
+      },
+      deltaGas: (run.totalGas.oldScheme - run.totalGas.newScheme).toString(),
+      ratioOldToNew:
+        run.totalGas.newScheme > 0n
+          ? Number(run.totalGas.oldScheme) / Number(run.totalGas.newScheme)
+          : null,
+    },
   };
 }
 
 async function stepDecrypt({ provider, run }) {
-  if (!run?.contract || run.taskId === undefined) throw new Error("Task not ready for decryption");
+  if (!run?.schemes?.newScheme?.contract || run?.schemes?.newScheme?.taskId === undefined) {
+    throw new Error("Task not ready for decryption");
+  }
   if (!run?.clientKeys) throw new Error("Missing client keys");
 
-  const [C1bytes, C2bytes, _C4bytes] = await run.contract.getWinningCiphertext(run.taskId);
+  const [C1bytes, C2bytes, _C4bytes] = await run.schemes.newScheme.contract.getWinningCiphertext(
+    run.schemes.newScheme.taskId
+  );
 
   const C1buf = hexToBuffer(C1bytes);
   const C2buf = hexToBuffer(C2bytes);
