@@ -10,6 +10,14 @@ const {
   verifyProof,
   decrypt,
 } = require("../utils/crypto");
+const {
+  mulG1,
+  deriveScalarForOldScheme,
+  g1ToUncompressed64,
+  randomScalar32,
+  buildPairingFreeSubmission,
+  randomScalarBN,
+} = require("../utils/crypto/bn254_g1");
 
 function parseEvents(contract, logs) {
   return logs
@@ -23,6 +31,34 @@ function parseEvents(contract, logs) {
     .filter(Boolean);
 }
 
+async function resolveTaskIdFromReceipt({ scheme, receipt }) {
+  // Primary path: parse logs from this tx receipt.
+  const events = parseEvents(scheme.contract, receipt.logs);
+  const taskCreatedEvt = events.find((e) => e && e.name === "TaskCreated");
+  if (taskCreatedEvt?.args?.taskId !== undefined && taskCreatedEvt?.args?.taskId !== null) {
+    return taskCreatedEvt.args.taskId;
+  }
+
+  // Fallback 1: query TaskCreated events in the exact mined block.
+  try {
+    const evs = await scheme.contract.queryFilter(
+      scheme.contract.filters.TaskCreated(),
+      receipt.blockNumber,
+      receipt.blockNumber
+    );
+    const byTx = evs.find((e) => String(e.transactionHash).toLowerCase() === String(receipt.hash).toLowerCase());
+    if (byTx?.args?.taskId !== undefined && byTx?.args?.taskId !== null) return byTx.args.taskId;
+    if (evs.length > 0 && evs[evs.length - 1]?.args?.taskId !== undefined) {
+      return evs[evs.length - 1].args.taskId;
+    }
+  } catch (_) {
+    // continue to final fallback
+  }
+
+  // Fallback 2: monotonic counter on-chain.
+  return await scheme.contract.taskCount();
+}
+
 function safeGetGasPrice(receipt) {
   return receipt.effectiveGasPrice ?? receipt.gasPrice ?? null;
 }
@@ -30,6 +66,27 @@ function safeGetGasPrice(receipt) {
 function formatMaybeEther(wei) {
   if (wei === null || wei === undefined) return null;
   return ethers.formatEther(wei);
+}
+
+async function computeSafeGasLimit({ provider, from, to, data }) {
+  const latest = await provider.getBlock("latest");
+  const blockLimit = latest?.gasLimit ?? 16_000_000n;
+  const txCap = 16_000_000n; // stay under Hardhat tx gas cap
+  const cap0 = blockLimit > 100_000n ? blockLimit - 100_000n : blockLimit;
+  const cap = cap0 < txCap ? cap0 : txCap;
+
+  let estimate;
+  try {
+    estimate = await provider.estimateGas({ from, to, data });
+  } catch (e) {
+    // If the node can't estimate (e.g. very heavy crypto paths), fall back to a
+    // conservative near-block-limit value so the tx can still be executed.
+    return cap;
+  }
+
+  // Keep headroom for opcode variance, but stay under block/tx caps.
+  const buffered = (estimate * 120n) / 100n;
+  return buffered < cap ? buffered : cap;
 }
 
 /**
@@ -75,14 +132,32 @@ function hexToBuffer(hexOrBytes) {
 }
 
 async function stepDeploy({ provider, maxContractors = 10 }) {
-  const accounts = await provider.listAccounts();
-  if (accounts.length < 2) throw new Error("Hardhat node returned too few accounts");
+  // IMPORTANT: all signers must come from the SAME network/provider used by the API.
+  // (Mixing hardhat runtime signers with JsonRpcProvider signers can deploy/create on one
+  // network and submit on another, which causes "task does not exist".)
+  let addresses = [];
+  if (provider && typeof provider.send === "function") {
+    try {
+      addresses = await provider.send("eth_accounts", []);
+    } catch (_) {
+      addresses = [];
+    }
+  }
 
-  // In ethers v6, JsonRpcProvider.listAccounts() may return Signer objects.
-  const clientSigner = accounts[0];
-  const clientAddress = await clientSigner.getAddress();
-  const contractorSigners = accounts.slice(1, 1 + maxContractors);
-  const contractorAddresses = await Promise.all(contractorSigners.map((s) => s.getAddress()));
+  // Fallback for direct hardhat runtime usage (scripts/tests).
+  if (!Array.isArray(addresses) || addresses.length < 2) {
+    const hhSigners = await require("hardhat").ethers.getSigners();
+    addresses = await Promise.all(hhSigners.map((s) => s.getAddress()));
+  }
+
+  if (!Array.isArray(addresses) || addresses.length < 2) {
+    throw new Error("Hardhat node returned too few accounts");
+  }
+
+  const clientAddress = addresses[0];
+  const clientSigner = await provider.getSigner(clientAddress);
+  const contractorAddresses = addresses.slice(1, 1 + maxContractors);
+  const contractorSigners = await Promise.all(contractorAddresses.map((a) => provider.getSigner(a)));
 
   const deployOne = async (label, artifact) => {
     const factory = new ethers.ContractFactory(artifact.abi, artifact.bytecode, clientSigner);
@@ -158,10 +233,10 @@ async function stepCreateTask({
       .connect(clientSigner)
       .createTask(description, rewardWei, { value: rewardWei });
     const receipt = await tx.wait();
-    const events = parseEvents(scheme.contract, receipt.logs);
-    const taskCreatedEvt = events.find((e) => e && e.name === "TaskCreated");
-    const taskId = taskCreatedEvt ? taskCreatedEvt.args.taskId : null;
-    if (taskId === null) throw new Error(`TaskCreated event not found for ${schemeKey}`);
+    const taskId = await resolveTaskIdFromReceipt({ scheme, receipt });
+    if (taskId === null || taskId === undefined) {
+      throw new Error(`TaskCreated event not found for ${schemeKey}`);
+    }
     const gasPrice = safeGetGasPrice(receipt);
     const gasUsed = receipt.gasUsed ?? null;
     const gasCostWei = gasPrice && gasUsed ? gasUsed * gasPrice : null;
@@ -230,35 +305,75 @@ async function stepSubmitContractors({
     const before = await provider.getBalance(addr);
 
     const conKeys = generateKeyPair();
+    const bnSk = randomScalarBN();
+    const bnPk = g1ToUncompressed64(mulG1(bnSk));
     const cipher = encrypt(value, clientKeys.pk);
     const proof = generateProof(cipher, conKeys.pkBytes);
+    const bnProof = buildPairingFreeSubmission(value, bnPk);
 
     const offChainOk = verifyProof(
       {
         C1: cipher.C1,
-        C2: cipher.C2,
+        C3: cipher.C3,
         C4: cipher.C4,
-        R: proof.R,
-        z: proof.z,
+        A1: proof.A1,
+        A4: proof.A4,
+        zr: proof.zr,
       },
       conKeys.pkBytes
     );
 
     const submitOne = async (schemeKey) => {
       const scheme = run.schemes[schemeKey];
-      const data = scheme.contract.interface.encodeFunctionData("submitResult", [
-        scheme.taskId,
-        cipher.C1,
-        cipher.C2,
-        cipher.C4,
-        proof.R,
-        proof.z,
-        conKeys.pkBytes,
-      ]);
-      const tx = await signer.sendTransaction({
-        to: await scheme.contract.getAddress(),
+      const to = await scheme.contract.getAddress();
+      let submitArgs;
+      if (schemeKey === "newScheme") {
+        submitArgs = [
+          scheme.taskId,
+          bnProof.C1,
+          cipher.C1,
+          cipher.C2,
+          bnProof.C3,
+          bnProof.C4,
+          bnProof.A1,
+          bnProof.A4,
+          bnProof.zr,
+          bnPk,
+        ];
+      } else {
+        // Old/pairing scheme expects:
+        //   submitResult(taskId, C1, C2, C3, R(64), z(32), pkE)
+        const z = randomScalar32();
+        const sOld = deriveScalarForOldScheme({
+          C1: Buffer.from(cipher.C1),
+          C2: Buffer.from(cipher.C2),
+          C3: Buffer.from(cipher.C3),
+          zBytes: Buffer.from(z),
+          pkE: Buffer.from(conKeys.pkBytes),
+        });
+        const Rpt = mulG1(sOld);
+        submitArgs = [
+          scheme.taskId,
+          cipher.C1,
+          cipher.C2,
+          cipher.C3,
+          g1ToUncompressed64(Rpt),
+          z,
+          conKeys.pkBytes,
+        ];
+      }
+
+      const data = scheme.contract.interface.encodeFunctionData("submitResult", submitArgs);
+      const gasLimit = await computeSafeGasLimit({
+        provider,
+        from: addr,
+        to,
         data,
-        gasLimit: 8_000_000n,
+      });
+      const tx = await signer.sendTransaction({
+        to,
+        data,
+        gasLimit,
       });
       const receipt = await tx.wait();
       const gasPrice = safeGetGasPrice(receipt);
@@ -300,10 +415,11 @@ async function stepSubmitContractors({
       },
       balanceDeltaEth: ethers.formatEther(balanceDeltaWei),
       debug: {
-        C1: cipher.C1.toString("hex").slice(0, 16) + "...",
+        C1: (newSub.onChainProofValid ? bnProof.C1 : cipher.C1).toString("hex").slice(0, 16) + "...",
         C2: cipher.C2.toString("hex").slice(0, 16) + "...",
-        C4: cipher.C4.toString("hex").slice(0, 16) + "...",
-        R: proof.R.toString("hex").slice(0, 16) + "...",
+        C3: (newSub.onChainProofValid ? bnProof.C3 : cipher.C3).toString("hex").slice(0, 16) + "...",
+        C4: (newSub.onChainProofValid ? bnProof.C4 : cipher.C4).toString("hex").slice(0, 16) + "...",
+        A1: (newSub.onChainProofValid ? bnProof.A1 : proof.A1).toString("hex").slice(0, 16) + "...",
       },
     });
   }
@@ -328,11 +444,18 @@ async function stepFinalizeTask({ provider, run }) {
   const clientSigner = await provider.getSigner(run.clientAddress);
   const finalizeOne = async (schemeKey) => {
     const scheme = run.schemes[schemeKey];
+    const to = await scheme.contract.getAddress();
     const data = scheme.contract.interface.encodeFunctionData("finalizeTask", [scheme.taskId]);
-    const tx = await clientSigner.sendTransaction({
-      to: await scheme.contract.getAddress(),
+    const gasLimit = await computeSafeGasLimit({
+      provider,
+      from: run.clientAddress,
+      to,
       data,
-      gasLimit: 10_000_000n,
+    });
+    const tx = await clientSigner.sendTransaction({
+      to,
+      data,
+      gasLimit,
     });
     const receipt = await tx.wait();
     const events = parseEvents(scheme.contract, receipt.logs);
@@ -351,7 +474,7 @@ async function stepFinalizeTask({ provider, run }) {
     return {
       majorityCount: taskFinalizedEvt ? taskFinalizedEvt.args.majorityCount : null,
       totalSubmissions: taskFinalizedEvt ? taskFinalizedEvt.args.totalSubmissions : null,
-      winningC4: taskFinalizedEvt ? taskFinalizedEvt.args.winningC4 : null,
+      winningC3: taskFinalizedEvt ? taskFinalizedEvt.args.winningC3 : null,
       receipt: {
         txHash: receipt.hash,
         gasUsed: gasUsed ? gasUsed.toString() : null,
@@ -381,7 +504,7 @@ async function stepFinalizeTask({ provider, run }) {
     };
   });
 
-  run.winningC4 = newOut.winningC4;
+  run.winningC3 = newOut.winningC3;
   run.totalGas = {
     newScheme: run.schemes.newScheme.totalGasUsed,
     oldScheme: run.schemes.oldScheme.totalGasUsed,
@@ -390,7 +513,7 @@ async function stepFinalizeTask({ provider, run }) {
   return {
     majorityCount: newOut.majorityCount !== null ? newOut.majorityCount.toString() : null,
     totalSubmissions: newOut.totalSubmissions !== null ? newOut.totalSubmissions.toString() : null,
-    winningC4: newOut.winningC4 ? String(newOut.winningC4).slice(0, 16) + "..." : null,
+    winningC3: newOut.winningC3 ? String(newOut.winningC3).slice(0, 16) + "..." : null,
     finalizeReceipt: {
       newScheme: newOut.receipt,
       oldScheme: oldOut.receipt,
@@ -419,7 +542,7 @@ async function stepDecrypt({ provider, run }) {
   }
   if (!run?.clientKeys) throw new Error("Missing client keys");
 
-  const [C1bytes, C2bytes, _C4bytes] = await run.schemes.newScheme.contract.getWinningCiphertext(
+  const [C1bytes, C2bytes, _C3bytes] = await run.schemes.newScheme.contract.getWinningCiphertext(
     run.schemes.newScheme.taskId
   );
 

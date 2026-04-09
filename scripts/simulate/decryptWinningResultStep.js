@@ -6,7 +6,7 @@ module.exports = async function decryptWinningResultStep({
   clientKeys,
   decrypt,
 }) {
-  const [winC1bytes, winC2bytes] = await contract.getWinningCiphertext(taskId);
+  const [winC1bytes, winC2bytes, _winC3bytes] = await contract.getWinningCiphertext(taskId);
 
   const C1buf = Buffer.from(winC1bytes.slice(2), "hex");
   const C2buf = Buffer.from(winC2bytes.slice(2), "hex");

@@ -30,17 +30,19 @@ module.exports = async function submitContractorsStep({
     // Encrypt the result
     const cipher = encrypt(value, clientKeys.pk);
     info(`  C1 (g^r): ${cipher.C1.toString("hex").slice(0, 20)}…`);
-    info(`  C2 (M+r·pkD): ${cipher.C2.toString("hex").slice(0, 20)}…`);
-    info(`  C4 (equality tag): ${cipher.C4.toString("hex").slice(0, 20)}…`);
+    info(`  C2 (encrypted payload): ${cipher.C2.toString("hex").slice(0, 20)}…`);
+    info(`  C3 (equality base): ${cipher.C3.toString("hex").slice(0, 20)}…`);
+    info(`  C4 (equality commitment): ${cipher.C4.toString("hex").slice(0, 20)}…`);
 
-    // Generate Schnorr proof
+    // Generate DLEQ proof
     const proof = generateProof(cipher, conKeys.pkBytes);
-    info(`  R: ${proof.R.toString("hex").slice(0, 20)}…`);
-    info(`  z: ${proof.z.toString("hex").slice(0, 20)}…`);
+    info(`  A1: ${proof.A1.toString("hex").slice(0, 20)}…`);
+    info(`  A4: ${proof.A4.toString("hex").slice(0, 20)}…`);
+    info(`  zr: ${proof.zr.toString("hex").slice(0, 20)}…`);
 
     // Off-chain verify (sanity check)
     const offChainOk = verifyProof(
-      { C1: cipher.C1, C2: cipher.C2, C4: cipher.C4, R: proof.R, z: proof.z },
+      { C1: cipher.C1, C3: cipher.C3, C4: cipher.C4, A1: proof.A1, A4: proof.A4, zr: proof.zr },
       conKeys.pkBytes
     );
     if (offChainOk) ok(`  Off-chain proof valid ✓`);
@@ -53,9 +55,11 @@ module.exports = async function submitContractorsStep({
         taskId,
         cipher.C1,
         cipher.C2,
+        cipher.C3,
         cipher.C4,
-        proof.R,
-        proof.z,
+        proof.A1,
+        proof.A4,
+        proof.zr,
         conKeys.pkBytes
       );
     const receipt = await tx.wait();

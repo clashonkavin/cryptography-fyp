@@ -32,10 +32,15 @@ library Secp256k1 {
     // Core group operations
     // ─────────────────────────────────────────────────────────────────────────
 
+    struct JacobianPoint {
+        uint256 X;
+        uint256 Y;
+        uint256 Z; // Z == 0 encodes infinity
+    }
+
     /**
      * @dev Scalar multiplication: returns scalar * (px, py).
-     *      Double-and-add over the affine representation.
-     *      Gas cost: O(256) point doublings + O(128 avg) point additions.
+     *      Uses Jacobian coordinates to avoid per-step inversions.
      */
     function scalarMul(
         uint256 px,
@@ -44,19 +49,20 @@ library Secp256k1 {
     ) internal view returns (uint256 qx, uint256 qy) {
         if (scalar == 0) return (0, 0);
         scalar = scalar % N;
+        if (scalar == 0) return (0, 0);
 
-        uint256 ax = px;
-        uint256 ay = py;
-        qx = 0;
-        qy = 0;
+        JacobianPoint memory Q = JacobianPoint(0, 1, 0); // infinity
+        JacobianPoint memory A = _toJacobian(px, py);
 
         while (scalar > 0) {
             if (scalar & 1 == 1) {
-                (qx, qy) = pointAdd(qx, qy, ax, ay);
+                Q = _jacobianAdd(Q, A);
             }
-            (ax, ay) = pointDouble(ax, ay);
+            A = _jacobianDouble(A);
             scalar >>= 1;
         }
+
+        (qx, qy) = _toAffine(Q);
     }
 
     /**
@@ -104,6 +110,77 @@ library Secp256k1 {
         );
         x2 = addmod(mulmod(lam, lam, P), P - addmod(x, x, P), P);
         y2 = addmod(mulmod(lam, addmod(x, P - x2, P), P), P - y, P);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Jacobian helpers (a=0 curve: y^2 = x^3 + 7)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    function _toJacobian(uint256 x, uint256 y) private pure returns (JacobianPoint memory p) {
+        if (x == 0 && y == 0) return JacobianPoint(0, 1, 0);
+        return JacobianPoint(x, y, 1);
+    }
+
+    function _toAffine(JacobianPoint memory p) private view returns (uint256 x, uint256 y) {
+        if (p.Z == 0) return (0, 0);
+        uint256 zInv = modInv(p.Z, P);
+        uint256 zInv2 = mulmod(zInv, zInv, P);
+        uint256 zInv3 = mulmod(zInv2, zInv, P);
+        x = mulmod(p.X, zInv2, P);
+        y = mulmod(p.Y, zInv3, P);
+    }
+
+    // Jacobian doubling for a=0:
+    // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#doubling-dbl-2009-l
+    function _jacobianDouble(JacobianPoint memory p) private pure returns (JacobianPoint memory r) {
+        if (p.Z == 0) return p;
+        if (p.Y == 0) return JacobianPoint(0, 1, 0);
+
+        uint256 XX = mulmod(p.X, p.X, P);           // X1^2
+        uint256 YY = mulmod(p.Y, p.Y, P);           // Y1^2
+        uint256 YYYY = mulmod(YY, YY, P);           // Y1^4
+        uint256 ZZ = mulmod(p.Z, p.Z, P);           // Z1^2
+
+        uint256 S = mulmod(4, mulmod(p.X, YY, P), P); // S = 4*X1*Y1^2
+        uint256 M = mulmod(3, XX, P);                 // M = 3*X1^2 (a=0)
+
+        uint256 X3 = addmod(mulmod(M, M, P), P - addmod(S, S, P), P);
+        uint256 Y3 = addmod(mulmod(M, addmod(S, P - X3, P), P), P - mulmod(8, YYYY, P), P);
+        uint256 Z3 = mulmod(2, mulmod(p.Y, p.Z, P), P);
+
+        // ZZ is unused but kept in structure to match common formula components.
+        ZZ;
+        return JacobianPoint(X3, Y3, Z3);
+    }
+
+    // Jacobian addition (complete for generic case; handles infinity; non-complete for all edge cases but safe for our use with scalar mul loop)
+    // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#addition-add-2007-bl
+    function _jacobianAdd(JacobianPoint memory p, JacobianPoint memory q) private pure returns (JacobianPoint memory r) {
+        if (p.Z == 0) return q;
+        if (q.Z == 0) return p;
+
+        uint256 Z1Z1 = mulmod(p.Z, p.Z, P);
+        uint256 Z2Z2 = mulmod(q.Z, q.Z, P);
+        uint256 U1 = mulmod(p.X, Z2Z2, P);
+        uint256 U2 = mulmod(q.X, Z1Z1, P);
+        uint256 S1 = mulmod(p.Y, mulmod(q.Z, Z2Z2, P), P);
+        uint256 S2 = mulmod(q.Y, mulmod(p.Z, Z1Z1, P), P);
+
+        if (U1 == U2) {
+            if (S1 == S2) return _jacobianDouble(p);
+            return JacobianPoint(0, 1, 0);
+        }
+
+        uint256 H = addmod(U2, P - U1, P);
+        uint256 HH = mulmod(H, H, P);
+        uint256 HHH = mulmod(H, HH, P);
+        uint256 R = addmod(S2, P - S1, P);
+        uint256 V = mulmod(U1, HH, P);
+
+        uint256 X3 = addmod(addmod(mulmod(R, R, P), P - HHH, P), P - addmod(V, V, P), P);
+        uint256 Y3 = addmod(mulmod(R, addmod(V, P - X3, P), P), P - mulmod(S1, HHH, P), P);
+        uint256 Z3 = mulmod(H, mulmod(p.Z, q.Z, P), P);
+        return JacobianPoint(X3, Y3, Z3);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

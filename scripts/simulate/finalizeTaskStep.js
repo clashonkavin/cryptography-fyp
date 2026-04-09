@@ -21,15 +21,15 @@ module.exports = async function finalizeTaskStep({
 
   const finalizeEvt = events.find((e) => e.name === "TaskFinalized");
   if (finalizeEvt) {
-    const winC4hex = Buffer.from(
-      finalizeEvt.args.winningC4.slice(2),
+    const winC3hex = Buffer.from(
+      finalizeEvt.args.winningC3.slice(2),
       "hex"
     ).toString("hex");
     ok(`Task finalized!`);
     info(
       `Majority count: ${finalizeEvt.args.majorityCount} / ${finalizeEvt.args.totalSubmissions}`
     );
-    info(`Winning C4: ${winC4hex.slice(0, 20)}…`);
+    info(`Winning C3: ${winC3hex.slice(0, 20)}…`);
   }
 
   const rewardedAddrs = events

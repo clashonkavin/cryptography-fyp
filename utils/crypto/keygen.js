@@ -1,4 +1,4 @@
-const { G, compressPoint } = require("./ecc");
+const { G, compressPoint, encodePointXY } = require("./ecc");
 const { randomScalar } = require("./scalars");
 
 /**
@@ -8,7 +8,7 @@ const { randomScalar } = require("./scalars");
 function generateKeyPair() {
   const sk = randomScalar();
   const pk = G.mul(sk);
-  return { sk, pk, pkBytes: compressPoint(pk) };
+  return { sk, pk, pkBytes: compressPoint(pk), pkBytesXY: encodePointXY(pk) };
 }
 
 module.exports = { generateKeyPair };

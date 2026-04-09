@@ -17,7 +17,7 @@ const decryptWinningResultStep = require("./decryptWinningResultStep");
 async function runSimulation() {
   banner("BLOCKCHAIN OUTSOURCED COMPUTATION DEMO");
   console.log(`  Scheme: pairing-free PKEET-LE inspired (secp256k1)`);
-  console.log(`  Proof:  Schnorr PoK of encryption randomness r`);
+  console.log(`  Proof:  DLEQ (Chaum-Pedersen) for shared randomness r`);
 
   // ── 1. Deploy contract ───────────────────────────────────────────────────
   section("Step 1 · Deploy Contract");
@@ -82,7 +82,7 @@ async function runSimulation() {
   // ── Summary ─────────────────────────────────────────────────────────────
   banner("SIMULATION COMPLETE");
   console.log(`  ${C.green}✔${C.reset}  Contract deployed and task lifecycle completed`);
-  console.log(`  ${C.green}✔${C.reset}  Schnorr proofs verified on-chain (pure Solidity EC math)`);
+  console.log(`  ${C.green}✔${C.reset}  DLEQ proofs verified on-chain (pure Solidity EC math)`);
   console.log(`  ${C.green}✔${C.reset}  Majority vote selected correct result (25)`);
   console.log(`  ${C.green}✔${C.reset}  Dishonest contractor rejected & unrewarded`);
   console.log(

@@ -295,7 +295,7 @@ els.btnSubmit.addEventListener("click", async () => {
       GasCostETH_New: s.gas.newScheme?.gasCostEth ?? "",
       GasCostETH_Old: s.gas.oldScheme?.gasCostEth ?? "",
       BalanceDeltaETH: s.balanceDeltaEth,
-      C4: s.debug.C4,
+      C3: s.debug.C3,
       TxHash: (s.submitTxHash || "").slice(0, 14) + "...",
     }));
 
@@ -354,7 +354,7 @@ els.btnFinalize.addEventListener("click", async () => {
           majorityCount: out.majorityCount,
           totalSubmissions: out.totalSubmissions,
           finalizeReceipt: out.finalizeReceipt,
-          winningC4: out.winningC4,
+          winningC3: out.winningC3,
           gasComparison: out.gasComparison,
           contractBalanceDeltaEth: out.contractBalanceDeltaEth,
           contractors: contractorRows,

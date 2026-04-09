@@ -1,4 +1,4 @@
-const { G, compressPoint } = require("./ecc");
+const { G, compressPoint, encodePointXY } = require("./ecc");
 const { randomScalar, valueToScalar, hashToScalar } = require("./scalars");
 const { H_POINT } = require("./generators");
 
@@ -7,7 +7,7 @@ const { H_POINT } = require("./generators");
  *
  * @param {number|string} result  - The computation result (e.g. 25)
  * @param {Point}         pkD     - Client's public key point
- * @returns {{ C1, C2, C4, r, m }} - All compressed as Buffers; r,m are BN scalars
+ * @returns {{ C1, C2, C3, C4, r, m }} - All compressed as Buffers; r,m are BN scalars
  */
 function encrypt(result, pkD) {
   const r = randomScalar();
@@ -21,17 +21,25 @@ function encrypt(result, pkD) {
   const rPkD = pkD.mul(r);
   const C2 = Gm.add(rPkD);
 
-  // C4 = g^m + H1(m)*h  (equality tag – same m -> same C4)
+  // C3 = g^m + H1(m)*h  (deterministic equality base)
   const mBuf = Buffer.from(m.toString(16, 64), "hex");
   const h1m = hashToScalar(mBuf); // H1(m) scalar
-  const GmC4 = G.mul(m);
+  const GmC3 = G.mul(m);
   const h1mH = H_POINT.mul(h1m);
-  const C4 = GmC4.add(h1mH);
+  const C3 = GmC3.add(h1mH);
+
+  // C4 = C3^r
+  const C4 = C3.mul(r);
 
   return {
     C1: compressPoint(C1),
     C2: compressPoint(C2),
+    C3: compressPoint(C3),
     C4: compressPoint(C4),
+    C1xy: encodePointXY(C1),
+    C2xy: encodePointXY(C2),
+    C3xy: encodePointXY(C3),
+    C4xy: encodePointXY(C4),
     r, // keep for proof generation
     m, // keep for reference
     rScalar: r,

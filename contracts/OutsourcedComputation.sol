@@ -52,20 +52,21 @@ contract OutsourcedComputation {
      *
      *  Field       Size    Description
      *  ─────────── ─────── ─────────────────────────────────────────────
-     *  C1          33 B    g^r                 (compressed secp256k1 point)
+     *  C1          64 B    g^r                 (uncompressed secp256k1 point: x||y)
      *  C2          var     ECIES(pk_d, D)       (ephemeral pubkey ‖ IV ‖ ct ‖ tag)
-     *  C3          33 B    H2(g^m)             (equality tag base)
-     *  C4          33 B    C3^r                (equality tag commitment)
-     *  A1          33 B    g^kr                (DLEQ nonce on generator)
-     *  A4          33 B    C3^kr               (DLEQ nonce on C3)
+     *  C3          64 B    H2(g^m)             (equality tag base)
+     *  C4          64 B    C3^r                (equality tag commitment)
+     *  A1          64 B    g^kr                (DLEQ nonce on generator)
+     *  A4          64 B    C3^kr               (DLEQ nonce on C3)
      *  zrBytes     32 B    zr = kr + e·r mod N (DLEQ response scalar)
-     *  pkE         33 B    contractor pubkey   (binds proof to sender)
+     *  pkE         64 B    contractor pubkey   (binds proof to sender)
      *  verified    bool    true iff DLEQ check passed at submission time
      *  rewarded    bool    true iff reward has been paid to this contractor
      */
     struct Submission {
         address contractor;
-        bytes   C1;
+        bytes   C1Proof;    // BN254 proof base (for on-chain DLEQ verification)
+        bytes   C1Decrypt;  // secp256k1 compressed C1 used for off-chain decryption
         bytes   C2;
         bytes   C3;
         bytes   C4;
@@ -178,7 +179,8 @@ contract OutsourcedComputation {
      *  where  e = sha256(A1 ‖ A4 ‖ C1 ‖ C3 ‖ C4 ‖ pkE) mod N.
      *
      * @param taskId   Target task identifier.
-     * @param C1       g^r                       (33 bytes)
+     * @param C1Proof   BN254 proof base g^r      (64 bytes)
+     * @param C1Decrypt secp256k1 C1 for decrypt  (33 bytes)
      * @param C2       ECIES(pk_d, D)             (variable length)
      * @param C3       H2(g^m) — equality tag    (33 bytes)
      * @param C4       C3^r                       (33 bytes)
@@ -189,7 +191,8 @@ contract OutsourcedComputation {
      */
     function submitResult(
         uint256 taskId,
-        bytes memory C1,
+        bytes memory C1Proof,
+        bytes memory C1Decrypt,
         bytes memory C2,
         bytes memory C3,
         bytes memory C4,
@@ -203,22 +206,24 @@ contract OutsourcedComputation {
         require(!task.finalized,   "OutsourcedComputation: task already finalized");
 
         // Length validation
-        require(C1.length      == 33, "OutsourcedComputation: C1 must be 33 bytes");
+        require(C1Proof.length == 64, "OutsourcedComputation: C1 proof must be 64 bytes");
+        require(C1Decrypt.length == 33, "OutsourcedComputation: C1 decrypt must be 33 bytes");
         require(C2.length      >   0, "OutsourcedComputation: C2 cannot be empty");
-        require(C3.length      == 33, "OutsourcedComputation: C3 must be 33 bytes");
-        require(C4.length      == 33, "OutsourcedComputation: C4 must be 33 bytes");
-        require(A1.length      == 33, "OutsourcedComputation: A1 must be 33 bytes");
-        require(A4.length      == 33, "OutsourcedComputation: A4 must be 33 bytes");
+        require(C3.length      == 64, "OutsourcedComputation: C3 must be 64 bytes");
+        require(C4.length      == 64, "OutsourcedComputation: C4 must be 64 bytes");
+        require(A1.length      == 64, "OutsourcedComputation: A1 must be 64 bytes");
+        require(A4.length      == 64, "OutsourcedComputation: A4 must be 64 bytes");
         require(zrBytes.length == 32, "OutsourcedComputation: zr must be 32 bytes");
-        require(pkE.length     == 33, "OutsourcedComputation: pkE must be 33 bytes");
+        require(pkE.length     == 64, "OutsourcedComputation: pkE must be 64 bytes");
 
         // ── DLEQ verification ────────────────────────────────────────────────
-        bool valid = DLEQVerifier.verifyDLEQ(C1, C3, C4, A1, A4, zrBytes, pkE);
+        bool valid = DLEQVerifier.verifyDLEQ(C1Proof, C3, C4, A1, A4, zrBytes, pkE);
 
         uint256 idx = submissions[taskId].length;
         submissions[taskId].push(Submission({
             contractor: msg.sender,
-            C1:         C1,
+            C1Proof:    C1Proof,
+            C1Decrypt:  C1Decrypt,
             C2:         C2,
             C3:         C3,
             C4:         C4,
@@ -290,7 +295,7 @@ contract OutsourcedComputation {
         require(winCount > 0, "OutsourcedComputation: no valid submissions found");
 
         // ── Persist winning ciphertext ───────────────────────────────────────
-        task.winningC1 = subs[winIdx].C1;
+        task.winningC1 = subs[winIdx].C1Decrypt;
         task.winningC2 = subs[winIdx].C2;
         task.winningC3 = winC3;
         task.finalized = true;
@@ -368,7 +373,7 @@ contract OutsourcedComputation {
         bool rewarded
     ) {
         Submission storage s = submissions[taskId][idx];
-        return (s.contractor, s.C1, s.C2, s.C3, s.C4, s.verified, s.rewarded);
+        return (s.contractor, s.C1Decrypt, s.C2, s.C3, s.C4, s.verified, s.rewarded);
     }
 
     /**
