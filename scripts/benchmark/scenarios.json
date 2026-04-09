@@ -1,0 +1,27 @@
+[
+  {
+    "name": "Small majority (5 contractors)",
+    "contractorValues": [25, 25, 30, 25, 25],
+    "rewardEth": "0.05"
+  },
+  {
+    "name": "Large majority (8 contractors)",
+    "contractorValues": [25, 25, 25, 30, 25, 25, 40, 25],
+    "rewardEth": "0.05"
+  },
+  {
+    "name": "Split vote (6 contractors)",
+    "contractorValues": [25, 30, 25, 30, 25, 40],
+    "rewardEth": "0.05"
+  },
+  {
+    "name": "All equal (7 contractors)",
+    "contractorValues": [25, 25, 25, 25, 25, 25, 25],
+    "rewardEth": "0.05"
+  },
+  {
+    "name": "Higher variance (10 contractors)",
+    "contractorValues": [99, 99, 99, 17, 42, 99, 31, 99, 17, 99],
+    "rewardEth": "0.05"
+  }
+]

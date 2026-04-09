@@ -11,9 +11,13 @@ const {
   stepFinalizeTask,
   stepDecrypt,
 } = require("./simulateSteps");
+const { runResearchBenchmarks } = require("../scripts/benchmark/runResearchBenchmarks");
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 const HARDHAT_PORT = process.env.HARDHAT_PORT ? Number(process.env.HARDHAT_PORT) : 8545;
+const MAX_CONTRACTORS = process.env.MAX_CONTRACTORS
+  ? Number(process.env.MAX_CONTRACTORS)
+  : 100;
 const RPC_URL =
   process.env.RPC_URL || `http://127.0.0.1:${String(HARDHAT_PORT)}`;
 
@@ -38,7 +42,7 @@ async function main() {
     try {
       // For demo: one run at a time (reset any old state).
       activeRun = null;
-      const run = await stepDeploy({ provider, maxContractors: 10 });
+      const run = await stepDeploy({ provider, maxContractors: MAX_CONTRACTORS });
       activeRun = run;
       res.json({ runId: run.runId, ...runForUI(run) });
     } catch (err) {
@@ -113,6 +117,24 @@ async function main() {
       if (runId && activeRun.runId !== runId) throw new Error("Invalid runId");
       const out = await stepDecrypt({ provider, run: activeRun });
       res.json({ runId: activeRun.runId, ...out });
+    } catch (err) {
+      res.status(500).json({ error: String(err?.message || err) });
+    }
+  });
+
+  app.post("/api/researchBenchmarks", async (_req, res) => {
+    try {
+      const out = await runResearchBenchmarks({
+        provider,
+        log: () => {},
+      });
+      res.json({
+        ok: true,
+        outDir: out.outDir,
+        jsonPath: out.jsonPath,
+        htmlPath: out.htmlPath,
+        report: out.report,
+      });
     } catch (err) {
       res.status(500).json({ error: String(err?.message || err) });
     }

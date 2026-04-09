@@ -1,0 +1,208 @@
+{
+  "generatedAt": "2026-04-09T17:43:40.432Z",
+  "M1": {
+    "description": "On-chain gas per ciphertext verification versus pairing baseline.",
+    "perN": [
+      {
+        "n": 1,
+        "avgVerifyGasNew": 744216,
+        "avgVerifyGasOld": 1478420,
+        "totalSubmitGasNew": 744216,
+        "totalSubmitGasOld": 1478420,
+        "eqTestBatchMs": 0.0005419999999958236,
+        "eqTestPerCompareMs": 0.0005419999999958236,
+        "eqTestEstimatedGasSingleTx": 32343,
+        "eqTestEstimatedGasSingleExec": 11343
+      },
+      {
+        "n": 5,
+        "avgVerifyGasNew": 712876,
+        "avgVerifyGasOld": 1447068,
+        "totalSubmitGasNew": 3564380,
+        "totalSubmitGasOld": 7235340,
+        "eqTestBatchMs": 1.326082999999926,
+        "eqTestPerCompareMs": 0.3315207499999815,
+        "eqTestEstimatedGasSingleTx": 38355,
+        "eqTestEstimatedGasSingleExec": 17355
+      },
+      {
+        "n": 10,
+        "avgVerifyGasNew": 713426.4,
+        "avgVerifyGasOld": 1447624.4,
+        "totalSubmitGasNew": 7134264,
+        "totalSubmitGasOld": 14476244,
+        "eqTestBatchMs": 2.339000000000169,
+        "eqTestPerCompareMs": 0.2598888888889077,
+        "eqTestEstimatedGasSingleTx": 38355,
+        "eqTestEstimatedGasSingleExec": 17355
+      },
+      {
+        "n": 20,
+        "avgVerifyGasNew": 711718.8,
+        "avgVerifyGasOld": 1445916.2,
+        "totalSubmitGasNew": 14234376,
+        "totalSubmitGasOld": 28918324,
+        "eqTestBatchMs": 5.253875000000335,
+        "eqTestPerCompareMs": 0.2765197368421229,
+        "eqTestEstimatedGasSingleTx": 38355,
+        "eqTestEstimatedGasSingleExec": 17355
+      },
+      {
+        "n": 50,
+        "avgVerifyGasNew": 710692.08,
+        "avgVerifyGasOld": 1444890.8,
+        "totalSubmitGasNew": 35534604,
+        "totalSubmitGasOld": 72244540,
+        "eqTestBatchMs": 17.852624999999534,
+        "eqTestPerCompareMs": 0.3643392857142762,
+        "eqTestEstimatedGasSingleTx": 38355,
+        "eqTestEstimatedGasSingleExec": 17355
+      }
+    ],
+    "baselineReference": {
+      "ecPairingGasApprox": 45000,
+      "ecMulGasApprox": 6000,
+      "source": "BN254 precompile rough constants used in literature/tooling"
+    },
+    "scalability": {
+      "submitGasLinearFitNew": {
+        "slope": 710164.7452805793,
+        "intercept": 27534.38117403537,
+        "r2": 0.9999996441139977
+      },
+      "submitGasLinearFitOld": {
+        "slope": 1444363.6607189036,
+        "intercept": 27518.635634857415,
+        "r2": 0.9999999137327662
+      },
+      "interpretation": "High R^2 near 1 indicates near-linear growth in total submit gas with contractor count."
+    }
+  },
+  "M2": {
+    "description": "Off-chain wall-clock time for encrypt + DLEQ proof generation.",
+    "iterations": 150,
+    "unavailable": false,
+    "meanEncryptMs": 3.679157773333318,
+    "meanProofGenMs": 1.3291264333333674,
+    "meanEncryptPlusProofMs": 5.008284206666685,
+    "p95EncryptPlusProofMs": 5.686208999999508
+  },
+  "M3": {
+    "description": "Ciphertext byte-size comparison.",
+    "newSchemeBytes": {
+      "C1": 33,
+      "C2": 33,
+      "C3": 33,
+      "C4": 33,
+      "A1": 33,
+      "A4": 33,
+      "zr": 32,
+      "total": 230
+    },
+    "oldPairingBaselineRepoBytes": {
+      "C1": 33,
+      "C2": 33,
+      "C3": 33,
+      "R": 64,
+      "z": 32,
+      "pkE": 33,
+      "total": 228
+    },
+    "oldPairingBaselineCanonicalBytes": {
+      "C1": 64,
+      "C2": 64,
+      "C3": 64,
+      "C4": 64,
+      "R": 64,
+      "z": 32,
+      "total": 352
+    },
+    "deltaBytesOldRepoMinusNew": -2,
+    "deltaBytesOldCanonicalMinusNew": 122
+  },
+  "M4": {
+    "description": "EqTest latency and gas estimates across n.",
+    "perN": [
+      {
+        "n": 1,
+        "eqTestBatchMs": 0.0005419999999958236,
+        "eqTestPerCompareMs": 0.0005419999999958236,
+        "eqTestEstimatedGasSingleExec": 11343,
+        "eqTestEstimatedGasSingleTx": 32343
+      },
+      {
+        "n": 5,
+        "eqTestBatchMs": 1.326082999999926,
+        "eqTestPerCompareMs": 0.3315207499999815,
+        "eqTestEstimatedGasSingleExec": 17355,
+        "eqTestEstimatedGasSingleTx": 38355
+      },
+      {
+        "n": 10,
+        "eqTestBatchMs": 2.339000000000169,
+        "eqTestPerCompareMs": 0.2598888888889077,
+        "eqTestEstimatedGasSingleExec": 17355,
+        "eqTestEstimatedGasSingleTx": 38355
+      },
+      {
+        "n": 20,
+        "eqTestBatchMs": 5.253875000000335,
+        "eqTestPerCompareMs": 0.2765197368421229,
+        "eqTestEstimatedGasSingleExec": 17355,
+        "eqTestEstimatedGasSingleTx": 38355
+      },
+      {
+        "n": 50,
+        "eqTestBatchMs": 17.852624999999534,
+        "eqTestPerCompareMs": 0.3643392857142762,
+        "eqTestEstimatedGasSingleExec": 17355,
+        "eqTestEstimatedGasSingleTx": 38355
+      }
+    ],
+    "complexityStatement": "EqTest operation itself is a single equality check (constant-time primitive per comparison)."
+  },
+  "M5": {
+    "description": "Adversarial LE variant tests.",
+    "variants": [
+      {
+        "name": "LE-Honest",
+        "expected": true,
+        "passed": true,
+        "observed": true
+      },
+      {
+        "name": "LE-CopyAttack-DifferentPkE",
+        "expected": false,
+        "passed": true,
+        "observed": false
+      },
+      {
+        "name": "LE-C3Forgery",
+        "expected": false,
+        "passed": true,
+        "observed": false
+      },
+      {
+        "name": "LE-r0-MalformedResponse",
+        "expected": false,
+        "passed": true,
+        "observed": false
+      }
+    ]
+  },
+  "M6": {
+    "description": "Scalability/linearity checks.",
+    "submitGasLinearFitNew": {
+      "slope": 710164.7452805793,
+      "intercept": 27534.38117403537,
+      "r2": 0.9999996441139977
+    },
+    "submitGasLinearFitOld": {
+      "slope": 1444363.6607189036,
+      "intercept": 27518.635634857415,
+      "r2": 0.9999999137327662
+    },
+    "interpretation": "High R^2 near 1 indicates near-linear growth in total submit gas with contractor count.",
+    "eqTestComplexityClaim": "EqTest on-chain primitive is a single bytes equality check; gas per single call is near constant."
+  }
+}

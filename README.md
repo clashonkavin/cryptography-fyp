@@ -100,11 +100,65 @@ npm start
 
 Then open `http://127.0.0.1:3000`.
 
+UI now includes a **Research Dashboard (M1-M6)** section with charts/KPIs and a one-click
+`Run Research Benchmarks` action for screenshot-ready outputs.
+
 ### CLI simulation
 
 ```bash
 npm run simulate
 ```
+
+### Multi-scenario gas benchmark (with visual report)
+
+Run a deterministic benchmark suite that compares pairing-free (new) vs pairing-based (old)
+across several contractor distributions, then auto-generates machine + human-readable reports:
+
+```bash
+npm run benchmark:gas
+```
+
+Outputs are written under:
+
+- `reports/benchmarks/<timestamp>/benchmark-results.json`
+- `reports/benchmarks/<timestamp>/benchmark-report.md`
+- `reports/benchmarks/<timestamp>/benchmark-report.html`
+
+The script enforces that the pairing-free scheme remains cheaper by at least a threshold
+(default: `5%` improvement). To change the threshold:
+
+```bash
+MIN_IMPROVEMENT_PERCENT=8 npm run benchmark:gas
+```
+
+Default scenarios live in `scripts/benchmark/scenarios.json`. You can point to a custom
+scenario file:
+
+```bash
+BENCHMARK_SCENARIOS_FILE=./my-scenarios.json npm run benchmark:gas
+```
+
+### Research benchmark suite (M1-M6, paper-ready output)
+
+Runs explicit metrics and generates a screenshot-friendly report:
+
+```bash
+npm run benchmark:research
+```
+
+Outputs are written under:
+
+- `reports/research/<timestamp>/research-benchmark.json`
+- `reports/research/<timestamp>/research-benchmark.html`
+
+Included metrics:
+
+- `M1` Gas cost per verification vs pairing baseline across `n = 1,5,10,20,50`
+- `M2` Off-chain proof generation time (Node.js; noble-secp256k1-assisted benchmark)
+- `M3` Ciphertext size comparison in bytes
+- `M4` EqTest latency and estimated single-call gas
+- `M5` Adversarial tests (copy, C3 forgery, malformed r-response)
+- `M6` Scalability with linear fit (R²) for submit gas growth
 
 ---
 
@@ -132,3 +186,5 @@ Results vary slightly by run/environment, but direction should remain:
 - Decryption is off-chain and currently brute-forces candidate values in a small range.
 - This is a research/demo codebase, not production-hardened cryptography.
 - If you run into stale ABI/runtime issues in the UI, restart the server after code changes.
+- API/server contractor capacity is configurable via `MAX_CONTRACTORS` (default `100`).
+  Extra contractor wallets are auto-created/funded on local Hardhat when needed.

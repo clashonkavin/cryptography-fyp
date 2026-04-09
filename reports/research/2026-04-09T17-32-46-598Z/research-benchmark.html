@@ -1,0 +1,59 @@
+<!doctype html>
+<html><head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Research Benchmarks M1-M6</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+body{font-family:Inter,Arial,sans-serif;background:#f4f7ff;color:#0f172a;margin:0}
+.wrap{max-width:1500px;margin:0 auto;padding:28px}
+.hero{background:#fff;border:1px solid #dbe3f4;border-radius:16px;padding:18px;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.card{background:#fff;border:1px solid #dbe3f4;border-radius:12px;padding:12px}
+.span2{grid-column:span 2}
+.span4{grid-column:span 4}
+table{width:100%;border-collapse:collapse}th,td{border:1px solid #e5e7eb;padding:8px;text-align:left}
+th{background:#f8fafc}.ok{color:#166534;font-weight:700}.bad{color:#b91c1c;font-weight:700}
+@media(max-width:900px){.grid{grid-template-columns:1fr}.span2,.span4{grid-column:span 1}}
+</style>
+</head>
+<body><div class="wrap">
+<div class="hero">
+<h1>Research Benchmarks (M1-M6)</h1>
+<p>Generated: <code>2026-04-09T17:32:46.596Z</code></p>
+<p>M6 linearity (new/old R²): <b>1.0000</b> / <b>1.0000</b></p>
+<p>M1 baseline refs: ecPairing ~<b>45,000</b> gas, ecMul ~<b>6,000</b> gas.</p>
+</div>
+<div class="grid">
+<div class="card span2"><canvas id="m1Gas"></canvas></div>
+<div class="card span2"><canvas id="m6Linear"></canvas></div>
+<div class="card span2"><canvas id="m4Eq"></canvas></div>
+<div class="card span2"><canvas id="m3Size"></canvas></div>
+<div class="card span2"><h3>M3 Ciphertext Size</h3><p>New total: <b>230 B</b><br/>Old baseline total: <b>228 B</b><br/>Delta (old-new): <b>-2 B</b></p></div>
+<div class="card span2"><h3>M2 Proof Generation Time</h3><p>Mean encrypt+proof: <b>5.139 ms</b><br/>P95: <b>5.752 ms</b><br/>Iterations: 150</p></div>
+<div class="card span4"><h3>M1 + M4 Table</h3><table><thead><tr><th>n</th><th>Avg verify gas new</th><th>Avg verify gas old</th><th>EqTest est gas (single)</th><th>EqTest ms/compare</th></tr></thead><tbody><tr><td>1</td><td>744,216</td><td>1,478,420</td><td>32,343</td><td>0.001</td></tr><tr><td>5</td><td>716,839.2</td><td>1,451,045.6</td><td>38,355</td><td>0.510</td></tr><tr><td>10</td><td>713,425.2</td><td>1,447,619.6</td><td>38,355</td><td>1.838</td></tr><tr><td>20</td><td>711,719.4</td><td>1,445,915.6</td><td>38,355</td><td>0.571</td></tr><tr><td>50</td><td>710,295.52</td><td>1,444,495.2</td><td>38,355</td><td>10.806</td></tr></tbody></table></div>
+<div class="card span4"><h3>M4 Latency Table</h3><table><thead><tr><th>n</th><th>Batch latency (ms)</th><th>Per compare (ms)</th><th>EqTest estimated gas</th></tr></thead><tbody><tr><td>1</td><td>0.001</td><td>0.001</td><td>32,343</td></tr><tr><td>5</td><td>2.042</td><td>0.510</td><td>38,355</td></tr><tr><td>10</td><td>16.543</td><td>1.838</td><td>38,355</td></tr><tr><td>20</td><td>10.843</td><td>0.571</td><td>38,355</td></tr><tr><td>50</td><td>529.486</td><td>10.806</td><td>38,355</td></tr></tbody></table></div>
+<div class="card span4"><h3>M5 Security Tests</h3><table><thead><tr><th>Variant</th><th>Expected</th><th>Observed</th><th>Result</th></tr></thead><tbody><tr><td>LE-Honest</td><td>true</td><td>true</td><td class="ok">PASS</td></tr><tr><td>LE-CopyAttack-DifferentPkE</td><td>false</td><td>false</td><td class="ok">PASS</td></tr><tr><td>LE-C3Forgery</td><td>false</td><td>false</td><td class="ok">PASS</td></tr><tr><td>LE-r0-MalformedResponse</td><td>false</td><td>false</td><td class="ok">PASS</td></tr></tbody></table></div>
+</div>
+<script>
+const rows = [{"n":1,"avgVerifyGasNew":744216,"avgVerifyGasOld":1478420,"totalSubmitGasNew":744216,"totalSubmitGasOld":1478420,"eqTestBatchMs":0.0005840000000034706,"eqTestPerCompareMs":0.0005840000000034706,"eqTestEstimatedGasSingle":32343},{"n":5,"avgVerifyGasNew":716839.2,"avgVerifyGasOld":1451045.6,"totalSubmitGasNew":3584196,"totalSubmitGasOld":7255228,"eqTestBatchMs":2.041915999999901,"eqTestPerCompareMs":0.5104789999999753,"eqTestEstimatedGasSingle":38355},{"n":10,"avgVerifyGasNew":713425.2,"avgVerifyGasOld":1447619.6,"totalSubmitGasNew":7134252,"totalSubmitGasOld":14476196,"eqTestBatchMs":16.54337499999997,"eqTestPerCompareMs":1.8381527777777744,"eqTestEstimatedGasSingle":38355},{"n":20,"avgVerifyGasNew":711719.4,"avgVerifyGasOld":1445915.6,"totalSubmitGasNew":14234388,"totalSubmitGasOld":28918312,"eqTestBatchMs":10.843459000000166,"eqTestPerCompareMs":0.5707083684210614,"eqTestEstimatedGasSingle":38355},{"n":50,"avgVerifyGasNew":710295.52,"avgVerifyGasOld":1444495.2,"totalSubmitGasNew":35514776,"totalSubmitGasOld":72224760,"eqTestBatchMs":529.4864170000001,"eqTestPerCompareMs":10.805845244897961,"eqTestEstimatedGasSingle":38355}];
+const eqRows = [{"n":1,"eqTestBatchMs":0.0005840000000034706,"eqTestPerCompareMs":0.0005840000000034706,"eqTestEstimatedGasSingle":32343},{"n":5,"eqTestBatchMs":2.041915999999901,"eqTestPerCompareMs":0.5104789999999753,"eqTestEstimatedGasSingle":38355},{"n":10,"eqTestBatchMs":16.54337499999997,"eqTestPerCompareMs":1.8381527777777744,"eqTestEstimatedGasSingle":38355},{"n":20,"eqTestBatchMs":10.843459000000166,"eqTestPerCompareMs":0.5707083684210614,"eqTestEstimatedGasSingle":38355},{"n":50,"eqTestBatchMs":529.4864170000001,"eqTestPerCompareMs":10.805845244897961,"eqTestEstimatedGasSingle":38355}];
+new Chart(document.getElementById("m1Gas"),{
+ type:"bar",
+ data:{labels:rows.map(r=>String(r.n)),datasets:[{label:"New avg verify gas",data:rows.map(r=>r.avgVerifyGasNew)},{label:"Old avg verify gas",data:rows.map(r=>r.avgVerifyGasOld)}]}
+});
+new Chart(document.getElementById("m6Linear"),{
+ type:"line",
+ data:{labels:rows.map(r=>String(r.n)),datasets:[{label:"New total submit gas",data:rows.map(r=>r.totalSubmitGasNew)},{label:"Old total submit gas",data:rows.map(r=>r.totalSubmitGasOld)}]}
+});
+new Chart(document.getElementById("m4Eq"),{
+ type:"line",
+ data:{labels:eqRows.map(r=>String(r.n)),datasets:[{label:"EqTest ms/compare",data:eqRows.map(r=>r.eqTestPerCompareMs)},{label:"EqTest estimated gas",data:eqRows.map(r=>r.eqTestEstimatedGasSingle),yAxisID:"y1"}]},
+ options:{scales:{y:{type:"linear",position:"left"},y1:{type:"linear",position:"right",grid:{drawOnChartArea:false}}}}
+});
+new Chart(document.getElementById("m3Size"),{
+ type:"bar",
+ data:{labels:["New","Old"],datasets:[{label:"Ciphertext bytes",data:[230,228]}]}
+});
+</script>
+</div></body></html>

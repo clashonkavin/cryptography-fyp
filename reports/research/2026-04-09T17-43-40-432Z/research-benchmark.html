@@ -1,0 +1,62 @@
+<!doctype html>
+<html><head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Research Benchmarks M1-M6</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+body{font-family:Inter,Arial,sans-serif;background:#f4f7ff;color:#0f172a;margin:0}
+.wrap{max-width:1500px;margin:0 auto;padding:28px}
+.hero{background:#fff;border:1px solid #dbe3f4;border-radius:16px;padding:18px;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.card{background:#fff;border:1px solid #dbe3f4;border-radius:12px;padding:12px}
+.span2{grid-column:span 2}
+.span4{grid-column:span 4}
+table{width:100%;border-collapse:collapse}th,td{border:1px solid #e5e7eb;padding:8px;text-align:left}
+th{background:#f8fafc}.ok{color:#166534;font-weight:700}.bad{color:#b91c1c;font-weight:700}
+@media(max-width:900px){.grid{grid-template-columns:1fr}.span2,.span4{grid-column:span 1}}
+</style>
+</head>
+<body><div class="wrap">
+<div class="hero">
+<h1>Research Benchmarks (M1-M6)</h1>
+<p>Generated: <code>2026-04-09T17:43:40.432Z</code></p>
+<p>M6 linearity (new/old R²): <b>1.0000</b> / <b>1.0000</b></p>
+<p>M1 baseline refs: ecPairing ~<b>45,000</b> gas, ecMul ~<b>6,000</b> gas.</p>
+</div>
+<div class="grid">
+<div class="card span2"><canvas id="m1Gas"></canvas></div>
+<div class="card span2"><canvas id="m6Linear"></canvas></div>
+<div class="card span2"><canvas id="m4Eq"></canvas></div>
+<div class="card span2"><canvas id="m3Size"></canvas></div>
+<div class="card span2"><h3>M3 Ciphertext Size</h3><p>New total (CT tuple): <b>230 B</b><br/>Old baseline (repo payload): <b>228 B</b><br/>Old baseline (canonical pairing): <b>352 B</b><br/>Delta canonical-old minus new: <b>122 B</b></p></div>
+<div class="card span2"><h3>M2 Proof Generation Time</h3><p>Mean encrypt+proof: <b>5.008 ms</b><br/>P95: <b>5.686 ms</b><br/>Iterations: 150</p></div>
+<div class="card span4"><h3>M1 + M4 Table</h3><table><thead><tr><th>n (contractors)</th><th>Avg verify gas new</th><th>Avg verify gas old</th><th>EqTest exec gas (est)</th><th>EqTest ms/compare</th></tr></thead><tbody><tr><td>1</td><td>744,216</td><td>1,478,420</td><td>11,343</td><td>0.001</td></tr><tr><td>5</td><td>712,876</td><td>1,447,068</td><td>17,355</td><td>0.332</td></tr><tr><td>10</td><td>713,426.4</td><td>1,447,624.4</td><td>17,355</td><td>0.260</td></tr><tr><td>20</td><td>711,718.8</td><td>1,445,916.2</td><td>17,355</td><td>0.277</td></tr><tr><td>50</td><td>710,692.08</td><td>1,444,890.8</td><td>17,355</td><td>0.364</td></tr></tbody></table></div>
+<div class="card span4"><h3>M4 Latency Table</h3><table><thead><tr><th>n (contractors)</th><th>Batch latency (ms)</th><th>Per compare (ms)</th><th>EqTest exec gas (est)</th><th>EqTest tx gas incl 21k</th></tr></thead><tbody><tr><td>1</td><td>0.001</td><td>0.001</td><td>11,343</td><td>32,343</td></tr><tr><td>5</td><td>1.326</td><td>0.332</td><td>17,355</td><td>38,355</td></tr><tr><td>10</td><td>2.339</td><td>0.260</td><td>17,355</td><td>38,355</td></tr><tr><td>20</td><td>5.254</td><td>0.277</td><td>17,355</td><td>38,355</td></tr><tr><td>50</td><td>17.853</td><td>0.364</td><td>17,355</td><td>38,355</td></tr></tbody></table></div>
+<div class="card span4"><h3>M5 Security Tests</h3><table><thead><tr><th>Variant</th><th>Expected</th><th>Observed</th><th>Result</th></tr></thead><tbody><tr><td>LE-Honest</td><td>true</td><td>true</td><td class="ok">PASS</td></tr><tr><td>LE-CopyAttack-DifferentPkE</td><td>false</td><td>false</td><td class="ok">PASS</td></tr><tr><td>LE-C3Forgery</td><td>false</td><td>false</td><td class="ok">PASS</td></tr><tr><td>LE-r0-MalformedResponse</td><td>false</td><td>false</td><td class="ok">PASS</td></tr></tbody></table></div>
+</div>
+<script>
+const rows = [{"n":1,"avgVerifyGasNew":744216,"avgVerifyGasOld":1478420,"totalSubmitGasNew":744216,"totalSubmitGasOld":1478420,"eqTestBatchMs":0.0005419999999958236,"eqTestPerCompareMs":0.0005419999999958236,"eqTestEstimatedGasSingleTx":32343,"eqTestEstimatedGasSingleExec":11343},{"n":5,"avgVerifyGasNew":712876,"avgVerifyGasOld":1447068,"totalSubmitGasNew":3564380,"totalSubmitGasOld":7235340,"eqTestBatchMs":1.326082999999926,"eqTestPerCompareMs":0.3315207499999815,"eqTestEstimatedGasSingleTx":38355,"eqTestEstimatedGasSingleExec":17355},{"n":10,"avgVerifyGasNew":713426.4,"avgVerifyGasOld":1447624.4,"totalSubmitGasNew":7134264,"totalSubmitGasOld":14476244,"eqTestBatchMs":2.339000000000169,"eqTestPerCompareMs":0.2598888888889077,"eqTestEstimatedGasSingleTx":38355,"eqTestEstimatedGasSingleExec":17355},{"n":20,"avgVerifyGasNew":711718.8,"avgVerifyGasOld":1445916.2,"totalSubmitGasNew":14234376,"totalSubmitGasOld":28918324,"eqTestBatchMs":5.253875000000335,"eqTestPerCompareMs":0.2765197368421229,"eqTestEstimatedGasSingleTx":38355,"eqTestEstimatedGasSingleExec":17355},{"n":50,"avgVerifyGasNew":710692.08,"avgVerifyGasOld":1444890.8,"totalSubmitGasNew":35534604,"totalSubmitGasOld":72244540,"eqTestBatchMs":17.852624999999534,"eqTestPerCompareMs":0.3643392857142762,"eqTestEstimatedGasSingleTx":38355,"eqTestEstimatedGasSingleExec":17355}];
+const eqRows = [{"n":1,"eqTestBatchMs":0.0005419999999958236,"eqTestPerCompareMs":0.0005419999999958236,"eqTestEstimatedGasSingleExec":11343,"eqTestEstimatedGasSingleTx":32343},{"n":5,"eqTestBatchMs":1.326082999999926,"eqTestPerCompareMs":0.3315207499999815,"eqTestEstimatedGasSingleExec":17355,"eqTestEstimatedGasSingleTx":38355},{"n":10,"eqTestBatchMs":2.339000000000169,"eqTestPerCompareMs":0.2598888888889077,"eqTestEstimatedGasSingleExec":17355,"eqTestEstimatedGasSingleTx":38355},{"n":20,"eqTestBatchMs":5.253875000000335,"eqTestPerCompareMs":0.2765197368421229,"eqTestEstimatedGasSingleExec":17355,"eqTestEstimatedGasSingleTx":38355},{"n":50,"eqTestBatchMs":17.852624999999534,"eqTestPerCompareMs":0.3643392857142762,"eqTestEstimatedGasSingleExec":17355,"eqTestEstimatedGasSingleTx":38355}];
+new Chart(document.getElementById("m1Gas"),{
+ type:"bar",
+ data:{labels:rows.map(r=>String(r.n)),datasets:[{label:"New avg verify gas",data:rows.map(r=>r.avgVerifyGasNew)},{label:"Old avg verify gas",data:rows.map(r=>r.avgVerifyGasOld)}]},
+ options:{scales:{x:{title:{display:true,text:"Number of contractors (n)"}},y:{title:{display:true,text:"Gas per submission verification"}}}}
+});
+new Chart(document.getElementById("m6Linear"),{
+ type:"line",
+ data:{labels:rows.map(r=>String(r.n)),datasets:[{label:"New total submit gas",data:rows.map(r=>r.totalSubmitGasNew)},{label:"Old total submit gas",data:rows.map(r=>r.totalSubmitGasOld)}]},
+ options:{scales:{x:{title:{display:true,text:"Number of contractors (n)"}},y:{title:{display:true,text:"Total submit gas"}}}}
+});
+new Chart(document.getElementById("m4Eq"),{
+ type:"line",
+ data:{labels:eqRows.map(r=>String(r.n)),datasets:[{label:"EqTest ms/compare",data:eqRows.map(r=>r.eqTestPerCompareMs)},{label:"EqTest exec gas (est)",data:eqRows.map(r=>r.eqTestEstimatedGasSingleExec),yAxisID:"y1"}]},
+ options:{scales:{x:{title:{display:true,text:"Number of contractors (n)"}},y:{type:"linear",position:"left",title:{display:true,text:"Latency (ms/compare)"}},y1:{type:"linear",position:"right",grid:{drawOnChartArea:false},title:{display:true,text:"Execution gas"}}}}
+});
+new Chart(document.getElementById("m3Size"),{
+ type:"bar",
+ data:{labels:["New CT","Old repo payload","Old canonical pairing"],datasets:[{label:"Bytes",data:[230,228,352]}]},
+ options:{scales:{x:{title:{display:true,text:"Scheme/baseline"}},y:{title:{display:true,text:"Ciphertext/proof payload size (bytes)"}}}}
+});
+</script>
+</div></body></html>

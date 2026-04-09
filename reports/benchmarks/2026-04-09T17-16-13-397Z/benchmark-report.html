@@ -1,0 +1,125 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Gas Benchmark Report</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 24px; color: #111; }
+      .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+      .card { border: 1px solid #ddd; border-radius: 10px; padding: 12px; }
+      table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+      th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+      th { background: #f6f6f6; }
+      .ok { color: #0a7a2f; font-weight: 700; }
+      .bad { color: #b91c1c; font-weight: 700; }
+    </style>
+  </head>
+  <body>
+    <h1>Gas Benchmark Report</h1>
+    <p>Generated at: <code>2026-04-09T17:16:13.398Z</code></p>
+    <p>Minimum required improvement: <code>5%</code></p>
+    <p>Passes: <code>5/5</code></p>
+    <p>Mean total-gas improvement: <code>38.84%</code></p>
+    <p>Mean runtime-gas improvement: <code>46.95%</code></p>
+    <p>Mean submit-gas improvement: <code>50.66%</code></p>
+
+    <div class="grid">
+      <div class="card"><canvas id="chartImprovement"></canvas></div>
+      <div class="card"><canvas id="chartTotals"></canvas></div>
+      <div class="card"><canvas id="chartDelta"></canvas></div>
+    </div>
+
+    <h2>Scenario Table</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Scenario</th>
+          <th>New total gas</th>
+          <th>Old total gas</th>
+          <th>Delta (old-new)</th>
+          <th>Improvement</th>
+          <th>Pass</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+            <td>Small majority (5 contractors)</td>
+            <td>6,145,573</td>
+            <td>9,594,323</td>
+            <td>3,448,750</td>
+            <td>35.95%</td>
+            <td class="ok">YES</td>
+          </tr><tr>
+            <td>Large majority (8 contractors)</td>
+            <td>8,466,267</td>
+            <td>14,117,204</td>
+            <td>5,650,937</td>
+            <td>40.03%</td>
+            <td class="ok">YES</td>
+          </tr><tr>
+            <td>Split vote (6 contractors)</td>
+            <td>6,893,943</td>
+            <td>11,076,794</td>
+            <td>4,182,851</td>
+            <td>37.76%</td>
+            <td class="ok">YES</td>
+          </tr><tr>
+            <td>All equal (7 contractors)</td>
+            <td>7,706,276</td>
+            <td>12,623,100</td>
+            <td>4,916,824</td>
+            <td>38.95%</td>
+            <td class="ok">YES</td>
+          </tr><tr>
+            <td>Higher variance (10 contractors)</td>
+            <td>10,028,782</td>
+            <td>17,147,715</td>
+            <td>7,118,933</td>
+            <td>41.52%</td>
+            <td class="ok">YES</td>
+          </tr>
+      </tbody>
+    </table>
+
+    <script>
+      const labels = ["Small majority (5 contractors)","Large majority (8 contractors)","Split vote (6 contractors)","All equal (7 contractors)","Higher variance (10 contractors)"];
+      const improvements = [35.95,40.03,37.76,38.95,41.52];
+      const deltas = [3448750,5650937,4182851,4916824,7118933];
+      const newTotals = [6145573,8466267,6893943,7706276,10028782];
+      const oldTotals = [9594323,14117204,11076794,12623100,17147715];
+      const minLine = new Array(labels.length).fill(5);
+
+      new Chart(document.getElementById("chartImprovement"), {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [
+            { label: "Improvement %", data: improvements },
+            { label: "Minimum %", data: minLine, type: "line" }
+          ]
+        },
+        options: { responsive: true }
+      });
+
+      new Chart(document.getElementById("chartTotals"), {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [
+            { label: "New total gas", data: newTotals },
+            { label: "Old total gas", data: oldTotals }
+          ]
+        },
+        options: { responsive: true }
+      });
+
+      new Chart(document.getElementById("chartDelta"), {
+        type: "bar",
+        data: { labels, datasets: [{ label: "Delta gas (old-new)", data: deltas }] },
+        options: { responsive: true }
+      });
+    </script>
+  </body>
+</html>

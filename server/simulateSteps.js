@@ -156,8 +156,24 @@ async function stepDeploy({ provider, maxContractors = 10 }) {
 
   const clientAddress = addresses[0];
   const clientSigner = await provider.getSigner(clientAddress);
-  const contractorAddresses = addresses.slice(1, 1 + maxContractors);
+
+  const nativeContractorAddresses = addresses.slice(1);
+  const nativeUseCount = Math.min(maxContractors, nativeContractorAddresses.length);
+  const contractorAddresses = nativeContractorAddresses.slice(0, nativeUseCount);
   const contractorSigners = await Promise.all(contractorAddresses.map((a) => provider.getSigner(a)));
+
+  // Provision extra funded wallets when requested contractors exceed node-provided accounts.
+  // This removes the practical cap from Hardhat's default account list.
+  const missing = maxContractors - contractorSigners.length;
+  if (missing > 0) {
+    const oneEthHex = `0x${(10n ** 18n).toString(16)}`;
+    for (let i = 0; i < missing; i++) {
+      const wallet = ethers.Wallet.createRandom().connect(provider);
+      await provider.send("hardhat_setBalance", [wallet.address, oneEthHex]);
+      contractorSigners.push(wallet);
+      contractorAddresses.push(wallet.address);
+    }
+  }
 
   const deployOne = async (label, artifact) => {
     const factory = new ethers.ContractFactory(artifact.abi, artifact.bytecode, clientSigner);
@@ -177,6 +193,10 @@ async function stepDeploy({ provider, maxContractors = 10 }) {
         gasPrice: gasPrice ? gasPrice.toString() : null,
         gasCostEth: formatMaybeEther(gasCostWei),
       },
+      deployGasUsed: gasUsed ? BigInt(gasUsed) : 0n,
+      createTaskGasUsed: 0n,
+      submitGasUsed: 0n,
+      finalizeGasUsed: 0n,
       totalGasUsed: gasUsed ? BigInt(gasUsed) : 0n,
     };
   };
@@ -241,7 +261,9 @@ async function stepCreateTask({
     const gasUsed = receipt.gasUsed ?? null;
     const gasCostWei = gasPrice && gasUsed ? gasUsed * gasPrice : null;
     scheme.taskId = taskId;
-    scheme.totalGasUsed += gasUsed ? BigInt(gasUsed) : 0n;
+    const used = gasUsed ? BigInt(gasUsed) : 0n;
+    scheme.createTaskGasUsed += used;
+    scheme.totalGasUsed += used;
     return {
       taskId: taskId.toString(),
       receipt: {
@@ -382,7 +404,9 @@ async function stepSubmitContractors({
       const events = parseEvents(scheme.contract, receipt.logs);
       const submittedEvt = events.find((e) => e && e.name === "ResultSubmitted");
       const proofValidOnChain = submittedEvt ? submittedEvt.args.proofValid : false;
-      scheme.totalGasUsed += gasUsed ? BigInt(gasUsed) : 0n;
+      const used = gasUsed ? BigInt(gasUsed) : 0n;
+      scheme.submitGasUsed += used;
+      scheme.totalGasUsed += used;
       return {
         txHash: receipt.hash,
         gasUsed: gasUsed ? gasUsed.toString() : null,
@@ -390,7 +414,10 @@ async function stepSubmitContractors({
         onChainProofValid: Boolean(proofValidOnChain),
       };
     };
-    const [newSub, oldSub] = await Promise.all([submitOne("newScheme"), submitOne("oldScheme")]);
+    // Nonce-safe ordering: with automine enabled, parallel tx submission from the
+    // same signer can race and trigger "nonce too low" on one branch.
+    const newSub = await submitOne("newScheme");
+    const oldSub = await submitOne("oldScheme");
 
     const after = await provider.getBalance(addr);
     const balanceDeltaWei = after - before;
@@ -470,7 +497,9 @@ async function stepFinalizeTask({ provider, run }) {
     const gasUsed = receipt.gasUsed ?? null;
     const gasCostWei = gasPrice && gasUsed ? gasUsed * gasPrice : null;
     const rewardedTotalWei = rewardedEvents.reduce((acc, e) => acc + BigInt(e.args.amount), 0n);
-    scheme.totalGasUsed += gasUsed ? BigInt(gasUsed) : 0n;
+    const used = gasUsed ? BigInt(gasUsed) : 0n;
+    scheme.finalizeGasUsed += used;
+    scheme.totalGasUsed += used;
     return {
       majorityCount: taskFinalizedEvt ? taskFinalizedEvt.args.majorityCount : null,
       totalSubmissions: taskFinalizedEvt ? taskFinalizedEvt.args.totalSubmissions : null,
@@ -486,7 +515,9 @@ async function stepFinalizeTask({ provider, run }) {
       rejected,
     };
   };
-  const [newOut, oldOut] = await Promise.all([finalizeOne("newScheme"), finalizeOne("oldScheme")]);
+  // Finalize uses the same client signer for both schemes; keep sequential for nonce safety.
+  const newOut = await finalizeOne("newScheme");
+  const oldOut = await finalizeOne("oldScheme");
 
   // build per-contractor table from active contractor signers
   const results = activeContractorSigners.map((signer, idx) => {
@@ -509,6 +540,20 @@ async function stepFinalizeTask({ provider, run }) {
     newScheme: run.schemes.newScheme.totalGasUsed,
     oldScheme: run.schemes.oldScheme.totalGasUsed,
   };
+  run.runtimeGas = {
+    newScheme:
+      run.schemes.newScheme.createTaskGasUsed +
+      run.schemes.newScheme.submitGasUsed +
+      run.schemes.newScheme.finalizeGasUsed,
+    oldScheme:
+      run.schemes.oldScheme.createTaskGasUsed +
+      run.schemes.oldScheme.submitGasUsed +
+      run.schemes.oldScheme.finalizeGasUsed,
+  };
+  run.submitGas = {
+    newScheme: run.schemes.newScheme.submitGasUsed,
+    oldScheme: run.schemes.oldScheme.submitGasUsed,
+  };
 
   return {
     majorityCount: newOut.majorityCount !== null ? newOut.majorityCount.toString() : null,
@@ -523,14 +568,28 @@ async function stepFinalizeTask({ provider, run }) {
     gasComparison: {
       newScheme: {
         totalGas: run.totalGas.newScheme.toString(),
+        runtimeGas: run.runtimeGas.newScheme.toString(),
+        submitGas: run.submitGas.newScheme.toString(),
       },
       oldScheme: {
         totalGas: run.totalGas.oldScheme.toString(),
+        runtimeGas: run.runtimeGas.oldScheme.toString(),
+        submitGas: run.submitGas.oldScheme.toString(),
       },
       deltaGas: (run.totalGas.oldScheme - run.totalGas.newScheme).toString(),
+      deltaRuntimeGas: (run.runtimeGas.oldScheme - run.runtimeGas.newScheme).toString(),
+      deltaSubmitGas: (run.submitGas.oldScheme - run.submitGas.newScheme).toString(),
       ratioOldToNew:
         run.totalGas.newScheme > 0n
           ? Number(run.totalGas.oldScheme) / Number(run.totalGas.newScheme)
+          : null,
+      ratioRuntimeOldToNew:
+        run.runtimeGas.newScheme > 0n
+          ? Number(run.runtimeGas.oldScheme) / Number(run.runtimeGas.newScheme)
+          : null,
+      ratioSubmitOldToNew:
+        run.submitGas.newScheme > 0n
+          ? Number(run.submitGas.oldScheme) / Number(run.submitGas.newScheme)
           : null,
     },
   };

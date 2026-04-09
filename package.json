@@ -7,9 +7,12 @@
     "start": "node server/index.js",
     "dev": "node server/index.js",
     "simulate": "hardhat run scripts/simulate.js",
-    "test": "hardhat test"
+    "test": "hardhat test",
+    "benchmark:gas": "hardhat run scripts/benchmark/runGasBenchmarks.js",
+    "benchmark:research": "hardhat run scripts/benchmark/runResearchBenchmarks.js"
   },
   "dependencies": {
+    "@noble/secp256k1": "^2.1.0",
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",
     "bn.js": "^5.2.1",
     "cors": "^2.8.6",

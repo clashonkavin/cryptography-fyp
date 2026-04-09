@@ -5,12 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
     <title>Outsourced Computation Demo</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
     <div class="container">
       <header class="header">
         <h1>Outsourced Computation (Dual-Scheme Compare)</h1>
+        <p class="subtitle">
+          Pairing-free vs pairing baseline, with research-grade metrics and visuals.
+        </p>
         <div id="banner" class="banner"></div>
       </header>
 
@@ -83,6 +87,22 @@
               <div class="gasLabel">Original/New Ratio</div>
               <div id="gasRatio" class="gasValue">-</div>
             </div>
+            <div class="gasBox">
+              <div class="gasLabel">Runtime Delta (Create+Submit+Finalize)</div>
+              <div id="gasRuntimeDelta" class="gasValue">-</div>
+            </div>
+            <div class="gasBox">
+              <div class="gasLabel">Submit Delta (verification-heavy path)</div>
+              <div id="gasSubmitDelta" class="gasValue">-</div>
+            </div>
+            <div class="gasBox">
+              <div class="gasLabel">Runtime Ratio (Old/New)</div>
+              <div id="gasRuntimeRatio" class="gasValue">-</div>
+            </div>
+            <div class="gasBox">
+              <div class="gasLabel">Submit Ratio (Old/New)</div>
+              <div id="gasSubmitRatio" class="gasValue">-</div>
+            </div>
           </div>
         </div>
         <div id="finalizeOut" class="out"></div>
@@ -92,6 +112,31 @@
         <h2>Step 5: Decrypt Winning Result (Off-chain)</h2>
         <button id="btnDecrypt" class="primary">Decrypt Winning Ciphertext</button>
         <div id="decryptOut" class="out"></div>
+      </section>
+
+      <section class="card card--research">
+        <h2>Research Dashboard (M1-M6)</h2>
+        <p class="subtitle">
+          Runs benchmark metrics for your paper and renders screenshot-friendly charts and tables.
+        </p>
+        <button id="btnResearch" class="primary">Run Research Benchmarks</button>
+        <div class="kpiGrid">
+          <div class="kpiBox"><div class="kpiLabel">M1 Avg Verify Gas Advantage</div><div id="kpiM1Gain" class="kpiValue">-</div></div>
+          <div class="kpiBox"><div class="kpiLabel">M2 Mean Encrypt+Proof (ms)</div><div id="kpiM2Mean" class="kpiValue">-</div></div>
+          <div class="kpiBox"><div class="kpiLabel">M3 Size Delta (canonical-old minus new)</div><div id="kpiM3Delta" class="kpiValue">-</div></div>
+          <div class="kpiBox"><div class="kpiLabel">M4 EqTest Estimated Gas (single)</div><div id="kpiM4EqGas" class="kpiValue">-</div></div>
+          <div class="kpiBox"><div class="kpiLabel">M6 R² (new)</div><div id="kpiM6R2New" class="kpiValue">-</div></div>
+          <div class="kpiBox"><div class="kpiLabel">M6 R² (old)</div><div id="kpiM6R2Old" class="kpiValue">-</div></div>
+          <div class="kpiBox"><div class="kpiLabel">M5 Attack Detection</div><div id="kpiM5Pass" class="kpiValue">-</div></div>
+        </div>
+        <div class="chartGrid">
+          <div class="chartCard"><canvas id="researchGasChart"></canvas></div>
+          <div class="chartCard"><canvas id="researchScaleChart"></canvas></div>
+          <div class="chartCard"><canvas id="researchEqLatencyChart"></canvas></div>
+          <div class="chartCard"><canvas id="researchSizeChart"></canvas></div>
+        </div>
+        <div id="researchM5Table" class="out"></div>
+        <div id="researchOut" class="out"></div>
       </section>
 
       <footer class="footer">
