@@ -48,6 +48,33 @@
             <input id="numContractors" type="number" value="5" />
           </label>
         </div>
+        <div class="autoRow">
+          <label class="checkRow">
+            <input id="autoContractorsToggle" type="checkbox" />
+            <span>Auto contractor mode (random answers)</span>
+          </label>
+          <button id="btnGenerateAutoValues" class="primary" type="button">Generate Random Values</button>
+        </div>
+        <div id="autoContractorsPanel" class="autoPanel" hidden>
+          <div class="grid">
+            <label>
+              Potential values pool (comma-separated)
+              <input id="autoPotentialValues" type="text" placeholder="e.g. 25, 30, 42" />
+            </label>
+            <label>
+              Random min (used when pool is empty)
+              <input id="autoRandomMin" type="number" value="0" />
+            </label>
+            <label>
+              Random max (used when pool is empty)
+              <input id="autoRandomMax" type="number" value="100" />
+            </label>
+          </div>
+          <p class="subtitle">
+            If potential values are provided, contractor answers are sampled from that pool.
+            If empty, values are generated uniformly from min/max.
+          </p>
+        </div>
 
         <div id="contractorInputs" class="tableWrap">
           <p id="contractorPlurality" class="pluralityPreview" hidden aria-live="polite"></p>
@@ -131,11 +158,13 @@
         </div>
         <div class="chartGrid">
           <div class="chartCard"><canvas id="researchGasChart"></canvas></div>
-          <div class="chartCard"><canvas id="researchScaleChart"></canvas></div>
+          <div class="chartCard"><canvas id="researchM2Chart"></canvas></div>
           <div class="chartCard"><canvas id="researchEqLatencyChart"></canvas></div>
+          <div class="chartCard"><canvas id="researchScaleChart"></canvas></div>
           <div class="chartCard"><canvas id="researchSizeChart"></canvas></div>
         </div>
         <div id="researchM5Table" class="out"></div>
+        <div id="researchM5Trace" class="out"></div>
         <div id="researchOut" class="out"></div>
       </section>
 

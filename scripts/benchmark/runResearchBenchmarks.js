@@ -10,6 +10,12 @@ const {
   stepFinalizeTask,
 } = require("../../server/simulateSteps");
 const { generateKeyPair, encrypt, generateProof, verifyProof } = require("../../utils/crypto");
+const {
+  buildPairingFreeSubmission,
+  randomScalarBN,
+  mulG1,
+  g1ToUncompressed64,
+} = require("../../utils/crypto/bn254_g1");
 
 const N_VALUES = [1, 5, 10, 20, 50];
 const ITERATIONS_M2 = Number(process.env.M2_ITERATIONS || "150");
@@ -239,61 +245,107 @@ function runM3() {
   };
 }
 
-function runM5() {
+async function runM5(provider) {
+  const run = await stepDeploy({ provider, maxContractors: 3 });
+  await stepCreateTask({
+    provider,
+    run,
+    description: "M5 security test task",
+    rewardEth: "0.01",
+  });
+  const submitter = run.contractorSigners[0];
+  const submitAddr = await submitter.getAddress();
+  const contract = run.schemes.newScheme.contract;
+  const taskId = run.schemes.newScheme.taskId;
+
+  const parseProofValid = (receipt) => {
+    const logs = receipt.logs || [];
+    for (const log of logs) {
+      try {
+        const p = contract.interface.parseLog(log);
+        if (p && p.name === "ResultSubmitted") return Boolean(p.args.proofValid);
+      } catch (_) {
+        // ignore non-matching logs
+      }
+    }
+    return false;
+  };
+
   const client = generateKeyPair();
-  const attacker = generateKeyPair();
-  const c = encrypt(25, client.pk);
-  const honest = generateProof(c, attacker.pkBytes);
+  const value = 25;
+  const c = encrypt(value, client.pk);
+  const bnSk = randomScalarBN();
+  const bnPk = g1ToUncompressed64(mulG1(bnSk));
+  const proof = buildPairingFreeSubmission(value, bnPk);
 
-  const honestOk = verifyProof(
-    { C1: c.C1, C3: c.C3, C4: c.C4, A1: honest.A1, A4: honest.A4, zr: honest.zr },
-    attacker.pkBytes
-  );
+  const submitAndCheck = async ({
+    name,
+    expected,
+    C1Proof = proof.C1,
+    C1Decrypt = c.C1,
+    C2 = c.C2,
+    C3 = proof.C3,
+    C4 = proof.C4,
+    A1 = proof.A1,
+    A4 = proof.A4,
+    zr = proof.zr,
+    pkE = bnPk,
+  }) => {
+    const tx = await contract.connect(submitter).submitResult(
+      taskId,
+      C1Proof,
+      C1Decrypt,
+      C2,
+      C3,
+      C4,
+      A1,
+      A4,
+      zr,
+      pkE
+    );
+    const receipt = await tx.wait();
+    const observed = parseProofValid(receipt);
+    return {
+      name,
+      expected,
+      observed,
+      passed: observed === expected,
+      txHash: receipt.hash,
+      submitter: submitAddr,
+    };
+  };
 
-  // Copy attack variant: copied transcript but changed identity key should fail.
-  const other = generateKeyPair();
-  const copyWithDifferentPkEOk = verifyProof(
-    { C1: c.C1, C3: c.C3, C4: c.C4, A1: honest.A1, A4: honest.A4, zr: honest.zr },
-    other.pkBytes
-  );
-
-  // C3 forgery variant: mutate C3 with untouched proof should fail.
-  const forgedC3 = Buffer.from(c.C3);
+  const otherBnPk = g1ToUncompressed64(mulG1(randomScalarBN()));
+  const forgedC3 = Buffer.from(proof.C3);
   forgedC3[0] ^= 0x01;
-  const forgedC3Ok = verifyProof(
-    { C1: c.C1, C3: forgedC3, C4: c.C4, A1: honest.A1, A4: honest.A4, zr: honest.zr },
-    attacker.pkBytes
-  );
 
-  // r=0-like malformed response: zero out zr should fail.
-  const zrZero = Buffer.alloc(32, 0);
-  const zeroResponseOk = verifyProof(
-    { C1: c.C1, C3: c.C3, C4: c.C4, A1: honest.A1, A4: honest.A4, zr: zrZero },
-    attacker.pkBytes
+  const variants = [];
+  variants.push(await submitAndCheck({ name: "LE-Honest", expected: true }));
+  variants.push(
+    await submitAndCheck({
+      name: "LE-CopyAttack-DifferentPkE",
+      expected: false,
+      pkE: otherBnPk,
+    })
+  );
+  variants.push(
+    await submitAndCheck({
+      name: "LE-C3Forgery",
+      expected: false,
+      C3: forgedC3,
+    })
+  );
+  variants.push(
+    await submitAndCheck({
+      name: "LE-r0-MalformedResponse",
+      expected: false,
+      zr: Buffer.alloc(32, 0),
+    })
   );
 
   return {
-    variants: [
-      { name: "LE-Honest", expected: true, passed: honestOk === true, observed: honestOk },
-      {
-        name: "LE-CopyAttack-DifferentPkE",
-        expected: false,
-        passed: copyWithDifferentPkEOk === false,
-        observed: copyWithDifferentPkEOk,
-      },
-      {
-        name: "LE-C3Forgery",
-        expected: false,
-        passed: forgedC3Ok === false,
-        observed: forgedC3Ok,
-      },
-      {
-        name: "LE-r0-MalformedResponse",
-        expected: false,
-        passed: zeroResponseOk === false,
-        observed: zeroResponseOk,
-      },
-    ],
+    testMode: "on-chain submitResult adversarial simulation",
+    variants,
   };
 }
 
@@ -308,7 +360,7 @@ function buildHtml(report) {
   const m5Rows = report.M5.variants
     .map(
       (v) =>
-        `<tr><td>${v.name}</td><td>${String(v.expected)}</td><td>${String(v.observed)}</td><td class="${
+        `<tr><td>${v.name}</td><td>${String(v.expected)}</td><td>${String(v.observed)}</td><td>${v.txHash || ""}</td><td class="${
           v.passed ? "ok" : "bad"
         }">${v.passed ? "PASS" : "FAIL"}</td></tr>`
     )
@@ -363,7 +415,7 @@ th{background:#f8fafc}.ok{color:#166534;font-weight:700}.bad{color:#b91c1c;font-
   }</p></div>
 <div class="card span4"><h3>M1 + M4 Table</h3><table><thead><tr><th>n (contractors)</th><th>Avg verify gas new</th><th>Avg verify gas old</th><th>EqTest exec gas (est)</th><th>EqTest ms/compare</th></tr></thead><tbody>${m1Rows}</tbody></table></div>
 <div class="card span4"><h3>M4 Latency Table</h3><table><thead><tr><th>n (contractors)</th><th>Batch latency (ms)</th><th>Per compare (ms)</th><th>EqTest exec gas (est)</th><th>EqTest tx gas incl 21k</th></tr></thead><tbody>${m4Rows}</tbody></table></div>
-<div class="card span4"><h3>M5 Security Tests</h3><table><thead><tr><th>Variant</th><th>Expected</th><th>Observed</th><th>Result</th></tr></thead><tbody>${m5Rows}</tbody></table></div>
+<div class="card span4"><h3>M5 Security Tests</h3><p>Mode: <code>${report.M5.testMode || ""}</code></p><table><thead><tr><th>Variant</th><th>Expected</th><th>Observed</th><th>Tx hash</th><th>Result</th></tr></thead><tbody>${m5Rows}</tbody></table></div>
 </div>
 <script>
 const rows = ${JSON.stringify(report.M1.perN)};
@@ -380,8 +432,8 @@ new Chart(document.getElementById("m6Linear"),{
 });
 new Chart(document.getElementById("m4Eq"),{
  type:"line",
- data:{labels:eqRows.map(r=>String(r.n)),datasets:[{label:"EqTest ms/compare",data:eqRows.map(r=>r.eqTestPerCompareMs)},{label:"EqTest exec gas (est)",data:eqRows.map(r=>r.eqTestEstimatedGasSingleExec),yAxisID:"y1"}]},
- options:{scales:{x:{title:{display:true,text:"Number of contractors (n)"}},y:{type:"linear",position:"left",title:{display:true,text:"Latency (ms/compare)"}},y1:{type:"linear",position:"right",grid:{drawOnChartArea:false},title:{display:true,text:"Execution gas"}}}}
+ data:{labels:eqRows.map(r=>String(r.n)),datasets:[{label:"EqTest batch latency (ms)",data:eqRows.map(r=>r.eqTestBatchMs)},{label:"EqTest per-compare latency (ms)",data:eqRows.map(r=>r.eqTestPerCompareMs)}]},
+ options:{scales:{x:{title:{display:true,text:"Number of contractors (n)"}},y:{type:"linear",position:"left",title:{display:true,text:"Latency (ms)"}}}}
 });
 new Chart(document.getElementById("m3Size"),{
  type:"bar",
@@ -398,7 +450,7 @@ async function runResearchBenchmarks({ provider, log = console.log } = {}) {
   const m1m4m6 = await runM1M4M6(activeProvider);
   const m2 = await runM2();
   const m3 = runM3();
-  const m5 = runM5();
+  const m5 = await runM5(activeProvider);
 
   const report = {
     generatedAt: new Date().toISOString(),

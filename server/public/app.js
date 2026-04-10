@@ -40,6 +40,12 @@ const els = {
   createTaskOut: $("createTaskOut"),
 
   numContractors: $("numContractors"),
+  autoContractorsToggle: $("autoContractorsToggle"),
+  btnGenerateAutoValues: $("btnGenerateAutoValues"),
+  autoContractorsPanel: $("autoContractorsPanel"),
+  autoPotentialValues: $("autoPotentialValues"),
+  autoRandomMin: $("autoRandomMin"),
+  autoRandomMax: $("autoRandomMax"),
   contractorInputs: $("contractorInputs"),
   contractorPlurality: $("contractorPlurality"),
   contractorTableBody: $("contractorTableBody"),
@@ -71,10 +77,12 @@ const els = {
   kpiM6R2Old: $("kpiM6R2Old"),
   kpiM5Pass: $("kpiM5Pass"),
   researchGasChart: $("researchGasChart"),
+  researchM2Chart: $("researchM2Chart"),
   researchScaleChart: $("researchScaleChart"),
   researchEqLatencyChart: $("researchEqLatencyChart"),
   researchSizeChart: $("researchSizeChart"),
   researchM5Table: $("researchM5Table"),
+  researchM5Trace: $("researchM5Trace"),
 };
 
 const DEFAULT_CONTRACTOR_VALUE = 0;
@@ -88,6 +96,7 @@ let state = {
   researchReport: null,
   charts: {
     researchGas: null,
+    researchM2: null,
     researchScale: null,
     researchEqLatency: null,
     researchSize: null,
@@ -175,6 +184,38 @@ function updatePluralityPreview() {
   p.append(lead, strong, tail);
 }
 
+function parsePotentialValues(raw) {
+  return String(raw || "")
+    .split(",")
+    .map((s) => Number(s.trim()))
+    .filter((n) => Number.isFinite(n));
+}
+
+function randomIntInclusive(min, max) {
+  const lo = Math.min(min, max);
+  const hi = Math.max(min, max);
+  return Math.floor(Math.random() * (hi - lo + 1)) + lo;
+}
+
+function generateAutoContractorValues(n) {
+  const pool = parsePotentialValues(els.autoPotentialValues?.value);
+  if (pool.length > 0) {
+    return Array.from({ length: n }, () => pool[randomIntInclusive(0, pool.length - 1)]);
+  }
+  const min = Number(els.autoRandomMin?.value ?? 0);
+  const max = Number(els.autoRandomMax?.value ?? 100);
+  return Array.from({ length: n }, () => randomIntInclusive(min, max));
+}
+
+function syncAutoModeUI() {
+  const auto = Boolean(els.autoContractorsToggle?.checked);
+  if (els.autoContractorsPanel) els.autoContractorsPanel.hidden = !auto;
+  const inputs = Array.from(document.querySelectorAll(".cValue"));
+  inputs.forEach((inp) => {
+    inp.disabled = auto;
+  });
+}
+
 /** Rebuilds contractor rows only when the row count changes; typing updates state + plurality only. */
 function renderContractorInputs() {
   const n = Number(els.numContractors.value || 0);
@@ -204,6 +245,7 @@ function renderContractorInputs() {
   }
 
   updatePluralityPreview();
+  syncAutoModeUI();
 }
 
 els.contractorInputs.addEventListener("input", (e) => {
@@ -244,6 +286,7 @@ function resetStepOutputs() {
   if (els.kpiM6R2Old) els.kpiM6R2Old.textContent = "-";
   if (els.kpiM5Pass) els.kpiM5Pass.textContent = "-";
   if (els.researchM5Table) els.researchM5Table.textContent = "";
+  if (els.researchM5Trace) els.researchM5Trace.textContent = "";
 }
 
 function renderResearchCharts(report) {
@@ -252,6 +295,7 @@ function renderResearchCharts(report) {
   const labels = rows.map((r) => String(r.n));
 
   if (state.charts.researchGas) state.charts.researchGas.destroy();
+  if (state.charts.researchM2) state.charts.researchM2.destroy();
   if (state.charts.researchScale) state.charts.researchScale.destroy();
   if (state.charts.researchEqLatency) state.charts.researchEqLatency.destroy();
   if (state.charts.researchSize) state.charts.researchSize.destroy();
@@ -296,32 +340,49 @@ function renderResearchCharts(report) {
     },
   });
 
-  state.charts.researchEqLatency = new Chart(els.researchEqLatencyChart, {
-    type: "line",
+  state.charts.researchM2 = new Chart(els.researchM2Chart, {
+    type: "bar",
     data: {
-      labels,
+      labels: ["Encrypt", "ProofGen", "Encrypt+Proof (mean)", "Encrypt+Proof (p95)"],
       datasets: [
-        { label: "M4 EqTest ms/compare", data: rows.map((r) => r.eqTestPerCompareMs) },
         {
-          label: "M4 EqTest exec gas (est)",
-          data: rows.map((r) => r.eqTestEstimatedGasSingleExec),
-          yAxisID: "y1",
+          label: "M2 latency (ms)",
+          data: [
+            Number(report?.M2?.meanEncryptMs ?? 0),
+            Number(report?.M2?.meanProofGenMs ?? 0),
+            Number(report?.M2?.meanEncryptPlusProofMs ?? 0),
+            Number(report?.M2?.p95EncryptPlusProofMs ?? 0),
+          ],
         },
       ],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { title: { display: true, text: "M4 EqTest Latency and Gas" } },
+      plugins: { title: { display: true, text: "M2 Proof Generation Time Breakdown" } },
+      scales: {
+        x: { title: { display: true, text: "Off-chain phase" } },
+        y: { title: { display: true, text: "Latency (ms)" } },
+      },
+    },
+  });
+
+  state.charts.researchEqLatency = new Chart(els.researchEqLatencyChart, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        { label: "M4 EqTest batch latency (ms)", data: rows.map((r) => r.eqTestBatchMs) },
+        { label: "M4 EqTest per-compare latency (ms)", data: rows.map((r) => r.eqTestPerCompareMs) },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { title: { display: true, text: "M4 EqTest Complexity View" } },
       scales: {
         x: { title: { display: true, text: "Number of contractors (n)" } },
-        y: { type: "linear", position: "left", title: { display: true, text: "Latency (ms/compare)" } },
-        y1: {
-          type: "linear",
-          position: "right",
-          grid: { drawOnChartArea: false },
-          title: { display: true, text: "Execution gas" },
-        },
+        y: { type: "linear", position: "left", title: { display: true, text: "Latency (ms)" } },
       },
     },
   });
@@ -412,15 +473,32 @@ els.numContractors.addEventListener("input", () => {
   setDisabled();
 });
 
+els.autoContractorsToggle?.addEventListener("change", () => {
+  syncAutoModeUI();
+});
+
+els.btnGenerateAutoValues?.addEventListener("click", () => {
+  const n = Number(els.numContractors.value || 0);
+  if (!n || n < 1) return;
+  state.contractorValues = generateAutoContractorValues(n);
+  renderContractorInputs();
+  setBanner("Auto-generated contractor values.", "info");
+});
+
 els.btnSubmit.addEventListener("click", async () => {
   try {
     els.btnSubmit.disabled = true;
     setBanner("Submitting results from all contractors...");
 
     const n = Number(els.numContractors.value);
-    const contractorValues = state.contractorValues.slice(0, n).map((x) =>
+    let contractorValues = state.contractorValues.slice(0, n).map((x) =>
       Number.isFinite(Number(x)) ? Number(x) : DEFAULT_CONTRACTOR_VALUE
     );
+    if (els.autoContractorsToggle?.checked) {
+      contractorValues = generateAutoContractorValues(n);
+      state.contractorValues = contractorValues.slice();
+      renderContractorInputs();
+    }
 
     const out = await postJson("/api/submitContractors", {
       runId: state.runId,
@@ -607,6 +685,25 @@ els.btnResearch?.addEventListener("click", async () => {
         `<thead><tr><th style="text-align:left;">Variant</th><th style="text-align:left;">Expected</th><th style="text-align:left;">Observed</th><th style="text-align:left;">Result</th></tr></thead>` +
         `<tbody>${rowsHtml}</tbody></table>`;
     }
+    if (els.researchM5Trace) {
+      const traces = m5Variants.map((v) => ({
+        variant: v.name,
+        txHash: v.txHash,
+        expected: v.expected,
+        observed: v.observed,
+        passed: v.passed,
+        submitter: v.submitter,
+      }));
+      els.researchM5Trace.textContent = JSON.stringify(
+        {
+          title: "M5 Attack Traces",
+          testMode: out.report?.M5?.testMode,
+          traces,
+        },
+        null,
+        2
+      );
+    }
     if (els.researchOut) {
       els.researchOut.textContent = JSON.stringify(
         {
@@ -631,4 +728,5 @@ els.btnResearch?.addEventListener("click", async () => {
 // initial render / gating
 renderContractorInputs();
 setDisabled();
+syncAutoModeUI();
 

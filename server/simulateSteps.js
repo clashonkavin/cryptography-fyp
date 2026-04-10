@@ -201,10 +201,9 @@ async function stepDeploy({ provider, maxContractors = 10 }) {
     };
   };
 
-  const [newScheme, oldScheme] = await Promise.all([
-    deployOne("newScheme", artifactNew),
-    deployOne("oldScheme", artifactOld),
-  ]);
+  // Nonce-safe deployment ordering (same client signer for both deployments).
+  const newScheme = await deployOne("newScheme", artifactNew);
+  const oldScheme = await deployOne("oldScheme", artifactOld);
 
   return {
     runId: crypto.randomUUID(),
@@ -275,7 +274,9 @@ async function stepCreateTask({
       gasCostWei,
     };
   };
-  const [newOut, oldOut] = await Promise.all([runCreateTask("newScheme"), runCreateTask("oldScheme")]);
+  // Nonce-safe createTask ordering (same client signer for both contracts).
+  const newOut = await runCreateTask("newScheme");
+  const oldOut = await runCreateTask("oldScheme");
 
   run.clientKeys = clientKeys;
   run.rewardWei = rewardWei;
