@@ -56,6 +56,8 @@ const els = {
   autoContractorsToggle: $("autoContractorsToggle"),
   btnGenerateAutoValues: $("btnGenerateAutoValues"),
   autoContractorsPanel: $("autoContractorsPanel"),
+  autoAnswerMode: $("autoAnswerMode"),
+  autoArrayLength: $("autoArrayLength"),
   autoPotentialValues: $("autoPotentialValues"),
   autoRandomMin: $("autoRandomMin"),
   autoRandomMax: $("autoRandomMax"),
@@ -232,6 +234,26 @@ function parsePotentialValues(raw) {
     .filter((n) => Number.isFinite(n));
 }
 
+function parsePotentialAnswerArrays(raw) {
+  const chunks = String(raw || "")
+    .split(";")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const out = [];
+  for (const chunk of chunks) {
+    if (!chunk.startsWith("[")) continue;
+    try {
+      const arr = JSON.parse(chunk);
+      if (Array.isArray(arr) && arr.every((x) => Number.isFinite(Number(x)))) {
+        out.push(arr.map((x) => Number(x)));
+      }
+    } catch (_) {
+      // ignore malformed chunks
+    }
+  }
+  return out;
+}
+
 function randomIntInclusive(min, max) {
   const lo = Math.min(min, max);
   const hi = Math.max(min, max);
@@ -240,6 +262,24 @@ function randomIntInclusive(min, max) {
 
 function generateAutoContractorValues(n) {
   const pool = parsePotentialValues(els.autoPotentialValues?.value);
+  const arrayPool = parsePotentialAnswerArrays(els.autoPotentialValues?.value);
+  const answerMode = els.autoAnswerMode?.value || "scalar";
+  const arrayLen = Math.max(1, Number(els.autoArrayLength?.value || 3));
+  const drawScalar = () => {
+    if (pool.length > 0) return pool[randomIntInclusive(0, pool.length - 1)];
+    const min = Number(els.autoRandomMin?.value ?? 0);
+    const max = Number(els.autoRandomMax?.value ?? 100);
+    return randomIntInclusive(min, max);
+  };
+  if (answerMode === "array") {
+    if (arrayPool.length > 0) {
+      return Array.from(
+        { length: n },
+        () => arrayPool[randomIntInclusive(0, arrayPool.length - 1)].slice()
+      );
+    }
+    return Array.from({ length: n }, () => Array.from({ length: arrayLen }, () => drawScalar()));
+  }
   if (pool.length > 0) {
     return Array.from({ length: n }, () => pool[randomIntInclusive(0, pool.length - 1)]);
   }
@@ -275,10 +315,12 @@ function renderContractorInputs() {
     tdNum.textContent = String(i + 1);
     const tdVal = document.createElement("td");
     const inp = document.createElement("input");
-    inp.type = "number";
+    inp.type = Array.isArray(state.contractorValues[i]) ? "text" : "number";
     inp.className = "cValue";
     inp.dataset.idx = String(i);
-    inp.value = String(state.contractorValues[i]);
+    inp.value = Array.isArray(state.contractorValues[i])
+      ? JSON.stringify(state.contractorValues[i])
+      : String(state.contractorValues[i]);
     tdVal.appendChild(inp);
     tr.appendChild(tdNum);
     tr.appendChild(tdVal);
@@ -295,7 +337,16 @@ els.contractorInputs.addEventListener("input", (e) => {
   const idx = Number(t.dataset.idx);
   if (!Number.isFinite(idx)) return;
   const raw = t.value.trim();
-  state.contractorValues[idx] = raw === "" ? NaN : Number(raw);
+  if (raw.startsWith("[")) {
+    try {
+      const arr = JSON.parse(raw);
+      state.contractorValues[idx] = Array.isArray(arr) ? arr : NaN;
+    } catch (_) {
+      state.contractorValues[idx] = NaN;
+    }
+  } else {
+    state.contractorValues[idx] = raw === "" ? NaN : Number(raw);
+  }
   updatePluralityPreview();
 });
 
@@ -556,6 +607,10 @@ async function loadVerifiers() {
       opt.textContent = `${v.name} (${v.id})`;
       els.verifierId.appendChild(opt);
     }
+    const hasGraphColoring = list.some((v) => v.id === "graph_coloring");
+    if (hasGraphColoring) {
+      els.verifierId.value = "graph_coloring";
+    }
   }
 }
 
@@ -620,9 +675,17 @@ els.btnSubmit.addEventListener("click", async () => {
     els.btnSubmit.disabled = true;
     setBanner("Submitting results from all contractors...");
 
+    // Always sync verifier policy before submit to avoid stale backend config.
+    if (state.runId) {
+      await postJson("/api/setVerifierConfig", {
+        runId: state.runId,
+        verifierConfig: buildVerifierConfigFromUI(),
+      });
+    }
+
     const n = Number(els.numContractors.value);
     let contractorValues = state.contractorValues.slice(0, n).map((x) =>
-      Number.isFinite(Number(x)) ? Number(x) : DEFAULT_CONTRACTOR_VALUE
+      Array.isArray(x) ? x : Number.isFinite(Number(x)) ? Number(x) : DEFAULT_CONTRACTOR_VALUE
     );
     if (els.autoContractorsToggle?.checked) {
       contractorValues = generateAutoContractorValues(n);
@@ -642,8 +705,13 @@ els.btnSubmit.addEventListener("click", async () => {
     const rows = state.submissions.map((s) => ({
       Contractor: s.contractorIndex,
       Address: s.contractorAddress.slice(0, 10) + "...",
-      Value: s.submittedValue,
+      Value: Array.isArray(s.submittedValue) ? JSON.stringify(s.submittedValue) : s.submittedValue,
       VerifierValid: s.verifierProgram?.valid === undefined ? "" : String(s.verifierProgram?.valid),
+      VerifierRuntimeMs:
+        s.verifierProgram?.runtimeMs === undefined || s.verifierProgram?.runtimeMs === null
+          ? ""
+          : Number(s.verifierProgram.runtimeMs).toFixed(3),
+      VerifierError: s.verifierProgram?.error || "",
       Skipped: s.skipped ? "true" : "false",
       SkipReason: s.skipReason || "",
       OffchainProofValid: s.offChainProofValid ? "true" : "false",
@@ -863,6 +931,7 @@ renderContractorInputs();
 setDisabled();
 syncAutoModeUI();
 syncVerifierModeUI();
+if (els.autoAnswerMode) els.autoAnswerMode.value = "array";
 loadVerifiers().catch((err) => {
   setBanner(`Failed to load verifier list: ${String(err.message || err)}`, "error");
 });

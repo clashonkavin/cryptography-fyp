@@ -29,7 +29,7 @@
         <div class="grid">
           <label>
             Description
-            <input id="description" type="text" value="Compute square of 5" />
+            <input id="description" type="text" value="Graph Coloring (3-colorability): verify candidate coloring for graph G with V={0..5}, E={(0,1),(1,2),(2,3),(3,4),(4,5),(5,0),(0,2),(2,4)}" />
           </label>
           <label>
             Reward (ETH)
@@ -45,19 +45,21 @@
         <p class="subtitle">
           Optional: attach a polynomial-time answer verifier after task creation. Disable for tasks without efficient verification.
         </p>
+        <div class="out">
+          <strong>Graph instance used in default verifier</strong>
+          <pre style="margin-top:8px;">{
+  "n": 6,
+  "k": 3,
+  "edges": [[0,1],[1,2],[2,3],[3,4],[4,5],[5,0],[0,2],[2,4]]
+}</pre>
+        </div>
         <div class="grid">
           <label>
             Mode
             <select id="verifierMode">
               <option value="none">No verifier (disabled)</option>
-              <option value="custom-answer-js">Custom answer-array verifier (recommended)</option>
-              <option value="builtin">Built-in verifier</option>
-              <option value="custom-js">Custom JS verifier</option>
+              <option value="custom-answer-js" selected>Custom answer-array verifier (recommended)</option>
             </select>
-          </label>
-          <label>
-            Built-in verifier
-            <select id="verifierId"></select>
           </label>
         </div>
         <div id="customVerifierPanel" class="autoPanel" hidden>
@@ -74,21 +76,28 @@
         <div id="answerVerifierPanel" class="autoPanel" hidden>
           <label>
             Answer-array verifier code (must define <code>verifyAnswer(answerArray)</code>)
-            <textarea id="answerVerifierCode" rows="8">function verifyAnswer(answerArray) {
-  return Array.isArray(answerArray) && answerArray.length === 1 && Number(answerArray[0]) === 25;
+            <textarea id="answerVerifierCode" rows="14">function verifyAnswer(answerArray) {
+  // Graph Coloring verifier for:
+  // n = 6, k = 3
+  // E = {(0,1),(1,2),(2,3),(3,4),(4,5),(5,0),(0,2),(2,4)}
+  const n = 6;
+  const k = 3;
+  const edges = [
+    [0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0], [0, 2], [2, 4]
+  ];
+  if (!Array.isArray(answerArray) || answerArray.length !== n) return false;
+  if (!answerArray.every((c) => Number.isInteger(c) && c >= 0 && c < k)) return false;
+  for (const [u, v] of edges) {
+    if (answerArray[u] === answerArray[v]) return false;
+  }
+  return true;
 }</textarea>
           </label>
         </div>
-        <div class="grid">
-          <label>
-            Instance JSON (int/float/array/object)
-            <textarea id="verifierInstance" rows="6">{"values":[3,34,4,12,5,2],"target":9}</textarea>
-          </label>
-          <label>
-            Witness JSON (int/float/array/object)
-            <textarea id="verifierWitness" rows="6">[2,4]</textarea>
-          </label>
-        </div>
+        <label>
+          Candidate answer array (quick check)
+          <textarea id="verifierWitness" rows="4">[0,1,2,0,1,2]</textarea>
+        </label>
         <div class="autoRow">
           <label class="checkRow">
             <input id="attachVerifierToTask" type="checkbox" />
@@ -122,8 +131,19 @@
         <div id="autoContractorsPanel" class="autoPanel" hidden>
           <div class="grid">
             <label>
+              Auto answer mode
+              <select id="autoAnswerMode">
+                <option value="scalar">Scalar number</option>
+                <option value="array" selected>Array of numbers</option>
+              </select>
+            </label>
+            <label>
+              Array length (for array mode)
+              <input id="autoArrayLength" type="number" value="6" min="1" />
+            </label>
+            <label>
               Potential values pool (comma-separated)
-              <input id="autoPotentialValues" type="text" placeholder="e.g. 25, 30, 42" />
+              <input id="autoPotentialValues" type="text" value="[0,1,2,0,1,2]; [1,2,0,1,2,0]; [2,0,1,2,0,1]; [0,0,1,2,0,1]; [0,1,1,0,2,2]; [2,2,2,2,2,2]" placeholder="Semicolon-separated arrays, e.g. [0,1,2,0,1,2]; [0,0,1,2,0,1]" />
             </label>
             <label>
               Random min (used when pool is empty)
@@ -135,7 +155,8 @@
             </label>
           </div>
           <p class="subtitle">
-            If potential values are provided, contractor answers are sampled from that pool.
+            For array mode, you can provide full answer arrays using semicolon-separated JSON arrays.
+            If only numeric pool values are provided, each array element is sampled from that pool.
             If empty, values are generated uniformly from min/max.
           </p>
         </div>
@@ -146,7 +167,7 @@
             <thead>
               <tr>
                 <th>Contractor</th>
-                <th>Submitted number (value)</th>
+                <th>Submitted answer</th>
               </tr>
             </thead>
             <tbody id="contractorTableBody"></tbody>

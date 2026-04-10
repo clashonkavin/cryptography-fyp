@@ -59,6 +59,25 @@ function verifyHamiltonianCycle(instance, witness) {
   return true;
 }
 
+function verifyGraphColoring(instance, witness) {
+  const n = instance?.n;
+  const k = instance?.k;
+  const edges = instance?.edges;
+  const coloring = witness?.coloring;
+  if (!isInt(n) || n <= 0 || !isInt(k) || k <= 0) return false;
+  if (!Array.isArray(edges) || !Array.isArray(coloring)) return false;
+  if (coloring.length !== n) return false;
+  if (!coloring.every((c) => isInt(c) && c >= 0 && c < k)) return false;
+  for (const e of edges) {
+    if (!Array.isArray(e) || e.length !== 2) return false;
+    const [u, v] = e;
+    if (!isInt(u) || !isInt(v) || u < 0 || v < 0 || u >= n || v >= n) return false;
+    if (u === v) return false;
+    if (coloring[u] === coloring[v]) return false;
+  }
+  return true;
+}
+
 const VERIFIER_REGISTRY = {
   subset_sum: {
     name: "Subset Sum (NP-complete)",
@@ -83,6 +102,14 @@ const VERIFIER_REGISTRY = {
       witness: { cycle: "number[]" },
     },
     verify: verifyHamiltonianCycle,
+  },
+  graph_coloring: {
+    name: "Graph Coloring / k-Coloring (NP-complete decision form)",
+    inputShape: {
+      instance: { n: "number", k: "number", edges: "number[][]" },
+      witness: { coloring: "number[] (length n, each in [0, k-1])" },
+    },
+    verify: verifyGraphColoring,
   },
 };
 

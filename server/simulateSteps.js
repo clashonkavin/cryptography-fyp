@@ -345,15 +345,19 @@ async function stepSubmitContractors({
 
   // balances per contractor (for this step only)
   const submissions = [];
+  const submittedScalars = [];
 
   for (let i = 0; i < N; i++) {
     const value = contractorValues[i];
+    const valueArray = Array.isArray(value) ? value : [value];
+    const scalarForCrypto = Number(valueArray[0]);
+    const cryptoValue = Number.isFinite(scalarForCrypto) ? scalarForCrypto : 0;
     const signer = run.contractorSigners[i];
     const addr = await signer.getAddress();
 
     let verifierProgram = null;
     if (run?.verifierConfig?.enabled) {
-      const witnessArray = Array.isArray(value) ? value : [value];
+      const witnessArray = valueArray;
       try {
         verifierProgram = runVerifierProgram({
           mode: run.verifierConfig.mode,
@@ -373,6 +377,7 @@ async function stepSubmitContractors({
     }
 
     if (run?.verifierConfig?.enabled && run?.verifierConfig?.enforce && !verifierProgram?.valid) {
+      submittedScalars.push(null);
       submissions.push({
         contractorIndex: i + 1,
         contractorAddress: addr,
@@ -399,9 +404,9 @@ async function stepSubmitContractors({
     const conKeys = generateKeyPair();
     const bnSk = randomScalarBN();
     const bnPk = g1ToUncompressed64(mulG1(bnSk));
-    const cipher = encrypt(value, clientKeys.pk);
+    const cipher = encrypt(cryptoValue, clientKeys.pk);
     const proof = generateProof(cipher, conKeys.pkBytes);
-    const bnProof = buildPairingFreeSubmission(value, bnPk);
+    const bnProof = buildPairingFreeSubmission(cryptoValue, bnPk);
 
     const offChainOk = verifyProof(
       {
@@ -491,11 +496,13 @@ async function stepSubmitContractors({
 
     const after = await provider.getBalance(addr);
     const balanceDeltaWei = after - before;
+    submittedScalars.push(cryptoValue);
 
     submissions.push({
       contractorIndex: i + 1,
       contractorAddress: addr,
-      submittedValue: Number(value),
+      submittedValue: value,
+      submittedValueScalar: cryptoValue,
       offChainProofValid: offChainOk,
       onChainProofValid: Boolean(newSub.onChainProofValid),
       onChainProofValidOld: Boolean(oldSub.onChainProofValid),
@@ -523,6 +530,8 @@ async function stepSubmitContractors({
   }
 
   run.submissionVerdicts = submissions.map((s) => Boolean(s.onChainProofValid));
+  run.submittedScalars = submittedScalars;
+  run.submittedAnswers = submissions.map((s) => s.submittedValue);
 
   return { submissions };
 }
@@ -681,11 +690,17 @@ async function stepDecrypt({ provider, run }) {
   const C1buf = hexToBuffer(C1bytes);
   const C2buf = hexToBuffer(C2bytes);
 
-  const submitted = Array.isArray(run.contractorValues) ? run.contractorValues.map(Number) : [];
+  const submitted = Array.isArray(run.submittedScalars)
+    ? run.submittedScalars
+        .map((v) => (Number.isFinite(Number(v)) ? Number(v) : NaN))
+        .filter((v) => Number.isFinite(v))
+    : Array.isArray(run.contractorValues)
+      ? run.contractorValues
+          .map((v) => (Array.isArray(v) ? Number(v[0]) : Number(v)))
+          .filter((v) => Number.isFinite(v))
+      : [];
   const verdicts = Array.isArray(run.submissionVerdicts) ? run.submissionVerdicts : null;
-  const verifiedSubmitted = verdicts
-    ? submitted.filter((_, i) => verdicts[i])
-    : submitted;
+  const verifiedSubmitted = verdicts ? submitted.filter((_, i) => verdicts[i]) : submitted;
   const candidates = [...new Set(submitted)];
   const result =
     candidates.length > 0
@@ -693,6 +708,36 @@ async function stepDecrypt({ provider, run }) {
       : null;
 
   const decryptedValue = result === null ? null : Number(result);
+  let decryptedAnswer = null;
+  if (decryptedValue !== null && Array.isArray(run.submittedAnswers) && Array.isArray(run.submittedScalars)) {
+    const verdictsArr = Array.isArray(run.submissionVerdicts) ? run.submissionVerdicts : null;
+    const matches = [];
+    for (let i = 0; i < run.submittedAnswers.length; i++) {
+      const scalar = Number(run.submittedScalars[i]);
+      const answer = run.submittedAnswers[i];
+      const verdictOk = verdictsArr ? Boolean(verdictsArr[i]) : true;
+      if (verdictOk && Number.isFinite(scalar) && scalar === decryptedValue && Array.isArray(answer)) {
+        matches.push(answer);
+      }
+    }
+    if (matches.length > 0) {
+      // choose most frequent array among matches
+      const counts = new Map();
+      for (const a of matches) {
+        const key = JSON.stringify(a);
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+      let bestKey = null;
+      let bestCount = -1;
+      for (const [k, c] of counts.entries()) {
+        if (c > bestCount) {
+          bestCount = c;
+          bestKey = k;
+        }
+      }
+      decryptedAnswer = bestKey ? JSON.parse(bestKey) : null;
+    }
+  }
   const plurality = pluralityFromValues(
     verifiedSubmitted.length > 0 ? verifiedSubmitted : submitted
   );
@@ -703,6 +748,7 @@ async function stepDecrypt({ provider, run }) {
 
   return {
     decryptedValue,
+    decryptedAnswer,
     majorityValue: plurality ? plurality.value : null,
     majorityCount: plurality ? plurality.count : null,
     matchesMajority,
