@@ -18,6 +18,7 @@ const {
   buildPairingFreeSubmission,
   randomScalarBN,
 } = require("../utils/crypto/bn254_g1");
+const { runVerifierProgram } = require("./verification/runner");
 
 function parseEvents(contract, logs) {
   return logs
@@ -131,7 +132,7 @@ function hexToBuffer(hexOrBytes) {
   throw new Error("Unsupported bytes type");
 }
 
-async function stepDeploy({ provider, maxContractors = 10 }) {
+async function stepDeploy({ provider, maxContractors = 10, isolatedClient = false }) {
   // IMPORTANT: all signers must come from the SAME network/provider used by the API.
   // (Mixing hardhat runtime signers with JsonRpcProvider signers can deploy/create on one
   // network and submit on another, which causes "task does not exist".)
@@ -154,13 +155,24 @@ async function stepDeploy({ provider, maxContractors = 10 }) {
     throw new Error("Hardhat node returned too few accounts");
   }
 
-  const clientAddress = addresses[0];
-  const clientSigner = await provider.getSigner(clientAddress);
+  let clientAddress = addresses[0];
+  let clientSigner = new ethers.NonceManager(await provider.getSigner(clientAddress));
+
+  // Optional isolated signer avoids nonce collisions with UI/default account activity.
+  if (isolatedClient) {
+    const wallet = ethers.Wallet.createRandom().connect(provider);
+    const initialBalance = `0x${(10n * 10n ** 18n).toString(16)}`; // 10 ETH
+    await provider.send("hardhat_setBalance", [wallet.address, initialBalance]);
+    clientAddress = wallet.address;
+    clientSigner = new ethers.NonceManager(wallet);
+  }
 
   const nativeContractorAddresses = addresses.slice(1);
   const nativeUseCount = Math.min(maxContractors, nativeContractorAddresses.length);
   const contractorAddresses = nativeContractorAddresses.slice(0, nativeUseCount);
-  const contractorSigners = await Promise.all(contractorAddresses.map((a) => provider.getSigner(a)));
+  const contractorSigners = await Promise.all(
+    contractorAddresses.map(async (a) => new ethers.NonceManager(await provider.getSigner(a)))
+  );
 
   // Provision extra funded wallets when requested contractors exceed node-provided accounts.
   // This removes the practical cap from Hardhat's default account list.
@@ -170,7 +182,7 @@ async function stepDeploy({ provider, maxContractors = 10 }) {
     for (let i = 0; i < missing; i++) {
       const wallet = ethers.Wallet.createRandom().connect(provider);
       await provider.send("hardhat_setBalance", [wallet.address, oneEthHex]);
-      contractorSigners.push(wallet);
+      contractorSigners.push(new ethers.NonceManager(wallet));
       contractorAddresses.push(wallet.address);
     }
   }
@@ -217,6 +229,7 @@ async function stepDeploy({ provider, maxContractors = 10 }) {
       oldScheme: oldScheme.contractAddress,
     },
     clientAddress,
+    clientSigner,
     contractorAddresses,
     contractorSigners,
     maxContractors,
@@ -232,6 +245,7 @@ async function stepCreateTask({
   run,
   description,
   rewardEth,
+  verifierConfig,
 }) {
   if (!run?.schemes?.newScheme?.contract || !run?.schemes?.oldScheme?.contract) {
     throw new Error("Deploy contracts first");
@@ -245,7 +259,7 @@ async function stepCreateTask({
   // For UI transfer display, compute from rewardWei + tx gas cost.
   // (Balance-delta approach can be misleading depending on RPC/pending state.)
 
-  const clientSigner = await provider.getSigner(run.clientAddress);
+  const clientSigner = run.clientSigner || new ethers.NonceManager(await provider.getSigner(run.clientAddress));
   const runCreateTask = async (schemeKey) => {
     const scheme = run.schemes[schemeKey];
     const tx = await scheme.contract
@@ -281,6 +295,17 @@ async function stepCreateTask({
   run.clientKeys = clientKeys;
   run.rewardWei = rewardWei;
   run.description = description;
+  run.verifierConfig =
+    verifierConfig && verifierConfig.enabled
+      ? {
+          enabled: true,
+          enforce: Boolean(verifierConfig.enforce),
+          mode: verifierConfig.mode || "builtin",
+          verifierId: verifierConfig.verifierId,
+          code: verifierConfig.code,
+          instance: verifierConfig.instance,
+        }
+      : { enabled: false, enforce: false };
 
   return {
     taskId: newOut.taskId,
@@ -296,6 +321,7 @@ async function stepCreateTask({
       newScheme: newOut.receipt,
       oldScheme: oldOut.receipt,
     },
+    verifierConfig: run.verifierConfig,
   };
 }
 
@@ -324,6 +350,49 @@ async function stepSubmitContractors({
     const value = contractorValues[i];
     const signer = run.contractorSigners[i];
     const addr = await signer.getAddress();
+
+    let verifierProgram = null;
+    if (run?.verifierConfig?.enabled) {
+      const witnessArray = Array.isArray(value) ? value : [value];
+      try {
+        verifierProgram = runVerifierProgram({
+          mode: run.verifierConfig.mode,
+          verifierId: run.verifierConfig.verifierId,
+          code: run.verifierConfig.code,
+          instance: run.verifierConfig.instance,
+          witness: witnessArray,
+        });
+      } catch (e) {
+        verifierProgram = {
+          mode: run.verifierConfig.mode,
+          valid: false,
+          runtimeMs: null,
+          error: String(e?.message || e),
+        };
+      }
+    }
+
+    if (run?.verifierConfig?.enabled && run?.verifierConfig?.enforce && !verifierProgram?.valid) {
+      submissions.push({
+        contractorIndex: i + 1,
+        contractorAddress: addr,
+        submittedValue: value,
+        skipped: true,
+        skipReason: "Verifier program rejected witness",
+        verifierProgram,
+        offChainProofValid: null,
+        onChainProofValid: null,
+        onChainProofValidOld: null,
+        submitTxHash: null,
+        gas: {
+          newScheme: { gasUsed: null, gasCostEth: null },
+          oldScheme: { gasUsed: null, gasCostEth: null },
+        },
+        balanceDeltaEth: "0.0",
+        debug: {},
+      });
+      continue;
+    }
 
     const before = await provider.getBalance(addr);
 
@@ -430,6 +499,7 @@ async function stepSubmitContractors({
       offChainProofValid: offChainOk,
       onChainProofValid: Boolean(newSub.onChainProofValid),
       onChainProofValidOld: Boolean(oldSub.onChainProofValid),
+      verifierProgram,
       submitTxHash: newSub.txHash,
       gas: {
         newScheme: {
@@ -469,7 +539,7 @@ async function stepFinalizeTask({ provider, run }) {
     ? run.contractorValues.map((_, idx) => contractorSigners[idx]).filter(Boolean)
     : contractorSigners;
 
-  const clientSigner = await provider.getSigner(run.clientAddress);
+  const clientSigner = run.clientSigner || new ethers.NonceManager(await provider.getSigner(run.clientAddress));
   const finalizeOne = async (schemeKey) => {
     const scheme = run.schemes[schemeKey];
     const to = await scheme.contract.getAddress();
@@ -521,20 +591,22 @@ async function stepFinalizeTask({ provider, run }) {
   const oldOut = await finalizeOne("oldScheme");
 
   // build per-contractor table from active contractor signers
-  const results = activeContractorSigners.map((signer, idx) => {
-    const addr = signer.address.toLowerCase();
-    const rewardAmountWei = newOut.rewarded.get(addr) ?? null;
-    const reason = newOut.rejected.get(addr) ?? null;
-    return {
-      contractorIndex: idx + 1,
-      contractorAddress: addr,
-      rewarded: rewardAmountWei !== null,
-      rewardAmountEth: rewardAmountWei !== null ? ethers.formatEther(rewardAmountWei) : null,
-      rejected: reason !== null && rewardAmountWei === null,
-      rejectReason: reason,
-      transferDeltaEth: rewardAmountWei !== null ? ethers.formatEther(rewardAmountWei) : "0.0",
-    };
-  });
+  const results = await Promise.all(
+    activeContractorSigners.map(async (signer, idx) => {
+      const addr = String(await signer.getAddress()).toLowerCase();
+      const rewardAmountWei = newOut.rewarded.get(addr) ?? null;
+      const reason = newOut.rejected.get(addr) ?? null;
+      return {
+        contractorIndex: idx + 1,
+        contractorAddress: addr,
+        rewarded: rewardAmountWei !== null,
+        rewardAmountEth: rewardAmountWei !== null ? ethers.formatEther(rewardAmountWei) : null,
+        rejected: reason !== null && rewardAmountWei === null,
+        rejectReason: reason,
+        transferDeltaEth: rewardAmountWei !== null ? ethers.formatEther(rewardAmountWei) : "0.0",
+      };
+    })
+  );
 
   run.winningC3 = newOut.winningC3;
   run.totalGas = {

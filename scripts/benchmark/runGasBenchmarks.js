@@ -239,7 +239,7 @@ function generateHtmlReport({ filePath, rows, aggregate, minImprovementPercent }
 }
 
 async function runScenario({ provider, scenarioItem, maxContractors }) {
-  const run = await stepDeploy({ provider, maxContractors });
+  const run = await stepDeploy({ provider, maxContractors, isolatedClient: true });
   const rewardEth = scenarioItem.rewardEth;
   const created = await stepCreateTask({
     provider,

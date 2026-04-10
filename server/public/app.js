@@ -31,6 +31,19 @@ function pluralityFromValues(values) {
 
 const els = {
   banner: $("banner"),
+  verifierMode: $("verifierMode"),
+  verifierId: $("verifierId"),
+  customVerifierPanel: $("customVerifierPanel"),
+  customVerifierCode: $("customVerifierCode"),
+  answerVerifierPanel: $("answerVerifierPanel"),
+  answerVerifierCode: $("answerVerifierCode"),
+  verifierInstance: $("verifierInstance"),
+  verifierWitness: $("verifierWitness"),
+  attachVerifierToTask: $("attachVerifierToTask"),
+  enforceVerifierOnSubmit: $("enforceVerifierOnSubmit"),
+  btnApplyVerifierToTask: $("btnApplyVerifierToTask"),
+  btnRunVerifier: $("btnRunVerifier"),
+  verifierOut: $("verifierOut"),
   btnDeploy: $("btnDeploy"),
   deployOut: $("deployOut"),
 
@@ -139,6 +152,34 @@ function postJson(url, body) {
     }
     return data;
   });
+}
+
+function parseJsonInput(text, label) {
+  try {
+    return JSON.parse(text);
+  } catch (_) {
+    throw new Error(`${label} is not valid JSON`);
+  }
+}
+
+function buildVerifierConfigFromUI() {
+  const attached = Boolean(els.attachVerifierToTask?.checked);
+  const mode = els.verifierMode?.value || "none";
+  if (mode === "none") return { enabled: false, enforce: false };
+  if (!attached) return { enabled: false, enforce: false };
+  return {
+    enabled: true,
+    enforce: Boolean(els.enforceVerifierOnSubmit?.checked),
+    mode,
+    verifierId: els.verifierId?.value,
+    code:
+      mode === "custom-js"
+        ? String(els.customVerifierCode?.value || "")
+        : mode === "custom-answer-js"
+          ? String(els.answerVerifierCode?.value || "")
+          : undefined,
+    instance: parseJsonInput(els.verifierInstance?.value || "{}", "Instance JSON"),
+  };
 }
 
 function setDisabled() {
@@ -305,17 +346,17 @@ function renderResearchCharts(report) {
     data: {
       labels,
       datasets: [
-        { label: "M1 Avg Verify Gas (New)", data: rows.map((r) => r.avgVerifyGasNew) },
-        { label: "M1 Avg Verify Gas (Old)", data: rows.map((r) => r.avgVerifyGasOld) },
+        { label: "M1 Total Submit Gas (New)", data: rows.map((r) => r.totalSubmitGasNew) },
+        { label: "M1 Total Submit Gas (Old)", data: rows.map((r) => r.totalSubmitGasOld) },
       ],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { title: { display: true, text: "M1 Gas Cost per Verification" } },
+      plugins: { title: { display: true, text: "M1 Total Submit Gas Comparison" } },
       scales: {
         x: { title: { display: true, text: "Number of contractors (n)" } },
-        y: { title: { display: true, text: "Gas per submission verification" } },
+        y: { title: { display: true, text: "Total submit gas" } },
       },
     },
   });
@@ -343,14 +384,14 @@ function renderResearchCharts(report) {
   state.charts.researchM2 = new Chart(els.researchM2Chart, {
     type: "bar",
     data: {
-      labels: ["Encrypt", "ProofGen", "Encrypt+Proof (mean)", "Encrypt+Proof (p95)"],
+      labels: ["Encrypt total", "Proof total", "Encrypt+Proof total", "Encrypt+Proof p95"],
       datasets: [
         {
-          label: "M2 latency (ms)",
+          label: "M2 latency totals (ms)",
           data: [
-            Number(report?.M2?.meanEncryptMs ?? 0),
-            Number(report?.M2?.meanProofGenMs ?? 0),
-            Number(report?.M2?.meanEncryptPlusProofMs ?? 0),
+            Number(report?.M2?.totalEncryptMs ?? 0),
+            Number(report?.M2?.totalProofGenMs ?? 0),
+            Number(report?.M2?.totalEncryptPlusProofMs ?? 0),
             Number(report?.M2?.p95EncryptPlusProofMs ?? 0),
           ],
         },
@@ -359,7 +400,7 @@ function renderResearchCharts(report) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { title: { display: true, text: "M2 Proof Generation Time Breakdown" } },
+      plugins: { title: { display: true, text: "M2 Total Latency Breakdown" } },
       scales: {
         x: { title: { display: true, text: "Off-chain phase" } },
         y: { title: { display: true, text: "Latency (ms)" } },
@@ -372,8 +413,7 @@ function renderResearchCharts(report) {
     data: {
       labels,
       datasets: [
-        { label: "M4 EqTest batch latency (ms)", data: rows.map((r) => r.eqTestBatchMs) },
-        { label: "M4 EqTest per-compare latency (ms)", data: rows.map((r) => r.eqTestPerCompareMs) },
+        { label: "M4 EqTest total batch latency (ms)", data: rows.map((r) => r.eqTestBatchMs) },
       ],
     },
     options: {
@@ -390,13 +430,12 @@ function renderResearchCharts(report) {
   state.charts.researchSize = new Chart(els.researchSizeChart, {
     type: "bar",
     data: {
-      labels: ["New CT", "Old repo payload", "Old canonical pairing"],
+      labels: ["New CT", "Old canonical pairing"],
       datasets: [
         {
           label: "M3 Ciphertext Total Bytes",
           data: [
             report?.M3?.newSchemeBytes?.total ?? 0,
-            report?.M3?.oldPairingBaselineRepoBytes?.total ?? 0,
             report?.M3?.oldPairingBaselineCanonicalBytes?.total ?? 0,
           ],
         },
@@ -448,6 +487,7 @@ els.btnCreateTask.addEventListener("click", async () => {
       runId: state.runId,
       description,
       rewardEth,
+      verifierConfig: buildVerifierConfigFromUI(),
     });
 
     // store taskId in DOM dataset for gating
@@ -485,6 +525,96 @@ els.btnGenerateAutoValues?.addEventListener("click", () => {
   setBanner("Auto-generated contractor values.", "info");
 });
 
+function syncVerifierModeUI() {
+  const mode = els.verifierMode?.value || "none";
+  if (els.customVerifierPanel) els.customVerifierPanel.hidden = mode !== "custom-js";
+  if (els.answerVerifierPanel) els.answerVerifierPanel.hidden = mode !== "custom-answer-js";
+  const disabled = mode === "none";
+  if (els.verifierId) els.verifierId.disabled = disabled || mode !== "builtin";
+  if (els.verifierInstance) els.verifierInstance.disabled = disabled || mode === "custom-answer-js";
+  if (els.verifierWitness) els.verifierWitness.disabled = disabled;
+  if (els.customVerifierCode) els.customVerifierCode.disabled = disabled || mode !== "custom-js";
+  if (els.answerVerifierCode) els.answerVerifierCode.disabled = disabled || mode !== "custom-answer-js";
+  if (els.btnRunVerifier) els.btnRunVerifier.disabled = disabled;
+  if (els.attachVerifierToTask) els.attachVerifierToTask.disabled = disabled;
+  if (els.enforceVerifierOnSubmit) els.enforceVerifierOnSubmit.disabled = disabled;
+  if (disabled) {
+    if (els.attachVerifierToTask) els.attachVerifierToTask.checked = false;
+    if (els.enforceVerifierOnSubmit) els.enforceVerifierOnSubmit.checked = false;
+  }
+}
+
+async function loadVerifiers() {
+  const resp = await fetch("/api/verifiers");
+  const data = await resp.json();
+  const list = Array.isArray(data?.verifiers) ? data.verifiers : [];
+  if (els.verifierId) {
+    els.verifierId.innerHTML = "";
+    for (const v of list) {
+      const opt = document.createElement("option");
+      opt.value = v.id;
+      opt.textContent = `${v.name} (${v.id})`;
+      els.verifierId.appendChild(opt);
+    }
+  }
+}
+
+els.verifierMode?.addEventListener("change", syncVerifierModeUI);
+
+els.btnApplyVerifierToTask?.addEventListener("click", async () => {
+  try {
+    const payload = {
+      runId: state.runId,
+      verifierConfig: buildVerifierConfigFromUI(),
+    };
+    const out = await postJson("/api/setVerifierConfig", payload);
+    if (els.verifierOut) {
+      els.verifierOut.textContent = JSON.stringify(
+        { appliedToTask: true, verifierConfig: out.verifierConfig },
+        null,
+        2
+      );
+    }
+    setBanner("Verifier policy applied to current task.", "info");
+  } catch (err) {
+    setBanner(String(err.message || err), "error");
+  }
+});
+
+els.btnRunVerifier?.addEventListener("click", async () => {
+  try {
+    els.btnRunVerifier.disabled = true;
+    const mode = els.verifierMode?.value || "none";
+    if (mode === "none") {
+      throw new Error("Verifier mode is disabled (No verifier). Select a verifier mode first.");
+    }
+    const payload = {
+      mode,
+      verifierId: els.verifierId?.value,
+      instance: parseJsonInput(els.verifierInstance?.value || "{}", "Instance JSON"),
+      witness: parseJsonInput(els.verifierWitness?.value || "{}", "Witness JSON"),
+      code:
+        mode === "custom-js"
+          ? String(els.customVerifierCode?.value || "")
+          : mode === "custom-answer-js"
+            ? String(els.answerVerifierCode?.value || "")
+            : undefined,
+    };
+    const out = await postJson("/api/verifyProgram", payload);
+    if (els.verifierOut) els.verifierOut.textContent = JSON.stringify(out, null, 2);
+    setBanner(
+      out.valid
+        ? "Verifier accepted witness (valid)."
+        : "Verifier rejected witness (invalid).",
+      out.valid ? "info" : "error"
+    );
+  } catch (err) {
+    setBanner(String(err.message || err), "error");
+  } finally {
+    els.btnRunVerifier.disabled = false;
+  }
+});
+
 els.btnSubmit.addEventListener("click", async () => {
   try {
     els.btnSubmit.disabled = true;
@@ -513,6 +643,9 @@ els.btnSubmit.addEventListener("click", async () => {
       Contractor: s.contractorIndex,
       Address: s.contractorAddress.slice(0, 10) + "...",
       Value: s.submittedValue,
+      VerifierValid: s.verifierProgram?.valid === undefined ? "" : String(s.verifierProgram?.valid),
+      Skipped: s.skipped ? "true" : "false",
+      SkipReason: s.skipReason || "",
       OffchainProofValid: s.offChainProofValid ? "true" : "false",
       OnchainProofValidNew: s.onChainProofValid ? "true" : "false",
       OnchainProofValidOld: s.onChainProofValidOld ? "true" : "false",
@@ -653,9 +786,9 @@ els.btnResearch?.addEventListener("click", async () => {
     const m1Rows = Array.isArray(m1.perN) ? m1.perN : [];
     const m4Rows = Array.isArray(m4.perN) ? m4.perN : m1Rows;
     const m5Variants = Array.isArray(m5.variants) ? m5.variants : [];
-    const avgNew = m1Rows.length ? m1Rows.reduce((a, r) => a + Number(r.avgVerifyGasNew || 0), 0) / m1Rows.length : 0;
-    const avgOld = m1Rows.length ? m1Rows.reduce((a, r) => a + Number(r.avgVerifyGasOld || 0), 0) / m1Rows.length : 0;
-    const m1Gain = avgOld > 0 ? ((avgOld - avgNew) / avgOld) * 100 : 0;
+    const totalNew = m1Rows.reduce((a, r) => a + Number(r.totalSubmitGasNew || 0), 0);
+    const totalOld = m1Rows.reduce((a, r) => a + Number(r.totalSubmitGasOld || 0), 0);
+    const m1Gain = totalOld > 0 ? ((totalOld - totalNew) / totalOld) * 100 : 0;
     const m4EqGasMean = m4Rows.length
       ? m4Rows.reduce((a, r) => a + Number(r.eqTestEstimatedGasSingleExec || 0), 0) / m4Rows.length
       : 0;
@@ -663,7 +796,7 @@ els.btnResearch?.addEventListener("click", async () => {
     if (els.kpiM2Mean) {
       els.kpiM2Mean.textContent = m2.unavailable
         ? "n/a"
-        : `${Number(m2.meanEncryptPlusProofMs || 0).toFixed(3)} ms`;
+        : `${Number(m2.totalEncryptPlusProofMs || 0).toFixed(3)} ms`;
     }
     if (els.kpiM1Gain) els.kpiM1Gain.textContent = `${m1Gain.toFixed(2)}%`;
     if (els.kpiM3Delta) els.kpiM3Delta.textContent = `${m3.deltaBytesOldCanonicalMinusNew ?? "-"} B`;
@@ -729,4 +862,8 @@ els.btnResearch?.addEventListener("click", async () => {
 renderContractorInputs();
 setDisabled();
 syncAutoModeUI();
+syncVerifierModeUI();
+loadVerifiers().catch((err) => {
+  setBanner(`Failed to load verifier list: ${String(err.message || err)}`, "error");
+});
 

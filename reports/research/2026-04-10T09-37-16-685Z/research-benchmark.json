@@ -1,60 +1,60 @@
 {
-  "generatedAt": "2026-04-10T08:20:07.681Z",
+  "generatedAt": "2026-04-10T09:37:16.685Z",
   "M1": {
     "description": "On-chain gas per ciphertext verification versus pairing baseline.",
     "perN": [
       {
         "n": 1,
-        "avgVerifyGasNew": 724316,
-        "avgVerifyGasOld": 1458508,
-        "totalSubmitGasNew": 724316,
-        "totalSubmitGasOld": 1458508,
-        "eqTestBatchMs": 0.0005830000000059954,
-        "eqTestPerCompareMs": 0.0005830000000059954,
+        "avgVerifyGasNew": 744216,
+        "avgVerifyGasOld": 1478420,
+        "totalSubmitGasNew": 744216,
+        "totalSubmitGasOld": 1478420,
+        "eqTestBatchMs": 0.0012500000011641532,
+        "eqTestPerCompareMs": 0.0012500000011641532,
         "eqTestEstimatedGasSingleTx": 32343,
         "eqTestEstimatedGasSingleExec": 11343
       },
       {
         "n": 5,
-        "avgVerifyGasNew": 716839.2,
+        "avgVerifyGasNew": 716844,
         "avgVerifyGasOld": 1451045.6,
-        "totalSubmitGasNew": 3584196,
+        "totalSubmitGasNew": 3584220,
         "totalSubmitGasOld": 7255228,
-        "eqTestBatchMs": 1.3174589999998716,
-        "eqTestPerCompareMs": 0.3293647499999679,
+        "eqTestBatchMs": 51.570334,
+        "eqTestPerCompareMs": 12.8925835,
         "eqTestEstimatedGasSingleTx": 38355,
         "eqTestEstimatedGasSingleExec": 17355
       },
       {
         "n": 10,
-        "avgVerifyGasNew": 713425.2,
-        "avgVerifyGasOld": 1447629.2,
-        "totalSubmitGasNew": 7134252,
-        "totalSubmitGasOld": 14476292,
-        "eqTestBatchMs": 2.1726670000000468,
-        "eqTestPerCompareMs": 0.24140744444444964,
+        "avgVerifyGasNew": 713421.6,
+        "avgVerifyGasOld": 1447623.2,
+        "totalSubmitGasNew": 7134216,
+        "totalSubmitGasOld": 14476232,
+        "eqTestBatchMs": 115.11108400000012,
+        "eqTestPerCompareMs": 12.790120444444458,
         "eqTestEstimatedGasSingleTx": 38355,
         "eqTestEstimatedGasSingleExec": 17355
       },
       {
         "n": 20,
-        "avgVerifyGasNew": 710723.2,
-        "avgVerifyGasOld": 1444920.6,
-        "totalSubmitGasNew": 14214464,
-        "totalSubmitGasOld": 28898412,
-        "eqTestBatchMs": 4.567666000000372,
-        "eqTestPerCompareMs": 0.24040347368423012,
+        "avgVerifyGasNew": 711716.4,
+        "avgVerifyGasOld": 1445917.4,
+        "totalSubmitGasNew": 14234328,
+        "totalSubmitGasOld": 28918348,
+        "eqTestBatchMs": 235.882916999999,
+        "eqTestPerCompareMs": 12.414890368421,
         "eqTestEstimatedGasSingleTx": 38355,
         "eqTestEstimatedGasSingleExec": 17355
       },
       {
         "n": 50,
-        "avgVerifyGasNew": 710689.68,
+        "avgVerifyGasNew": 710691.6,
         "avgVerifyGasOld": 1444891.76,
-        "totalSubmitGasNew": 35534484,
+        "totalSubmitGasNew": 35534580,
         "totalSubmitGasOld": 72244588,
-        "eqTestBatchMs": 19.3715830000001,
-        "eqTestPerCompareMs": 0.39533842857143064,
+        "eqTestBatchMs": 633.8060419999965,
+        "eqTestPerCompareMs": 12.934817183673399,
         "eqTestEstimatedGasSingleTx": 38355,
         "eqTestEstimatedGasSingleExec": 17355
       }
@@ -66,14 +66,14 @@
     },
     "scalability": {
       "submitGasLinearFitNew": {
-        "slope": 710178.3356607188,
-        "intercept": 23275.02663563639,
-        "r2": 0.9999994525770134
+        "slope": 710007.889837083,
+        "intercept": 34176.29480217099,
+        "r2": 0.9999999999965522
       },
       "submitGasLinearFitOld": {
-        "slope": 1444380.0920610293,
-        "intercept": 23268.016550296546,
-        "r2": 0.999999866637302
+        "slope": 1444207.9162141194,
+        "intercept": 34187.04111714661,
+        "r2": 0.999999999999432
       },
       "interpretation": "High R^2 near 1 indicates near-linear growth in total submit gas with contractor count."
     }
@@ -82,10 +82,13 @@
     "description": "Off-chain wall-clock time for encrypt + DLEQ proof generation.",
     "iterations": 150,
     "unavailable": false,
-    "meanEncryptMs": 3.766431106666617,
-    "meanProofGenMs": 1.3609266600000107,
-    "meanEncryptPlusProofMs": 5.127357766666628,
-    "p95EncryptPlusProofMs": 5.825875000000451
+    "totalEncryptMs": 551.5602880000442,
+    "totalProofGenMs": 198.37853900002665,
+    "totalEncryptPlusProofMs": 749.9388270000709,
+    "meanEncryptMs": 3.6770685866669615,
+    "meanProofGenMs": 1.3225235933335109,
+    "meanEncryptPlusProofMs": 4.999592180000473,
+    "p95EncryptPlusProofMs": 5.60899999999674
   },
   "M3": {
     "description": "Ciphertext byte-size comparison.",
@@ -125,36 +128,36 @@
     "perN": [
       {
         "n": 1,
-        "eqTestBatchMs": 0.0005830000000059954,
-        "eqTestPerCompareMs": 0.0005830000000059954,
+        "eqTestBatchMs": 0.0012500000011641532,
+        "eqTestPerCompareMs": 0.0012500000011641532,
         "eqTestEstimatedGasSingleExec": 11343,
         "eqTestEstimatedGasSingleTx": 32343
       },
       {
         "n": 5,
-        "eqTestBatchMs": 1.3174589999998716,
-        "eqTestPerCompareMs": 0.3293647499999679,
+        "eqTestBatchMs": 51.570334,
+        "eqTestPerCompareMs": 12.8925835,
         "eqTestEstimatedGasSingleExec": 17355,
         "eqTestEstimatedGasSingleTx": 38355
       },
       {
         "n": 10,
-        "eqTestBatchMs": 2.1726670000000468,
-        "eqTestPerCompareMs": 0.24140744444444964,
+        "eqTestBatchMs": 115.11108400000012,
+        "eqTestPerCompareMs": 12.790120444444458,
         "eqTestEstimatedGasSingleExec": 17355,
         "eqTestEstimatedGasSingleTx": 38355
       },
       {
         "n": 20,
-        "eqTestBatchMs": 4.567666000000372,
-        "eqTestPerCompareMs": 0.24040347368423012,
+        "eqTestBatchMs": 235.882916999999,
+        "eqTestPerCompareMs": 12.414890368421,
         "eqTestEstimatedGasSingleExec": 17355,
         "eqTestEstimatedGasSingleTx": 38355
       },
       {
         "n": 50,
-        "eqTestBatchMs": 19.3715830000001,
-        "eqTestPerCompareMs": 0.39533842857143064,
+        "eqTestBatchMs": 633.8060419999965,
+        "eqTestPerCompareMs": 12.934817183673399,
         "eqTestEstimatedGasSingleExec": 17355,
         "eqTestEstimatedGasSingleTx": 38355
       }
@@ -170,7 +173,7 @@
         "expected": true,
         "observed": true,
         "passed": true,
-        "txHash": "0x67c603c324b20c6f13a5831b028163fd05532dffe38b85b1d1535457c1339b50",
+        "txHash": "0xdefc3eab1ba526d973472f8ee98d7f1944d0d8bea838f8de2e2ce11411ac465a",
         "submitter": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
       },
       {
@@ -178,7 +181,7 @@
         "expected": false,
         "observed": false,
         "passed": true,
-        "txHash": "0x3d80b7df4da0edf733026694c62a40c7cf4a9ea6b27d80f8ad329be34d13d2c3",
+        "txHash": "0xa0e78490d5e722653793d67d52c6f91898e9d9eb97651bc7c0671e618c1df01e",
         "submitter": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
       },
       {
@@ -186,7 +189,7 @@
         "expected": false,
         "observed": false,
         "passed": true,
-        "txHash": "0x307f654ebf23576ae98bf1bf5869021a0f56b0190919fe72dbb682c20358ebcc",
+        "txHash": "0x1a2ffa80298157a4167c535d4d02435a4a7c4eed03d809b077e531b019ebcf78",
         "submitter": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
       },
       {
@@ -194,7 +197,7 @@
         "expected": false,
         "observed": false,
         "passed": true,
-        "txHash": "0xa86be6bd6b5872e27c8d242aa276826986695ade27b5fb040919ef374742b3db",
+        "txHash": "0x9bbe844db9662612eea659fb73b94cab92a62220f6d6726e669229bab47ea9e5",
         "submitter": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
       }
     ]
@@ -202,14 +205,14 @@
   "M6": {
     "description": "Scalability/linearity checks.",
     "submitGasLinearFitNew": {
-      "slope": 710178.3356607188,
-      "intercept": 23275.02663563639,
-      "r2": 0.9999994525770134
+      "slope": 710007.889837083,
+      "intercept": 34176.29480217099,
+      "r2": 0.9999999999965522
     },
     "submitGasLinearFitOld": {
-      "slope": 1444380.0920610293,
-      "intercept": 23268.016550296546,
-      "r2": 0.999999866637302
+      "slope": 1444207.9162141194,
+      "intercept": 34187.04111714661,
+      "r2": 0.999999999999432
     },
     "interpretation": "High R^2 near 1 indicates near-linear growth in total submit gas with contractor count.",
     "eqTestComplexityClaim": "EqTest on-chain primitive is a single bytes equality check; gas per single call is near constant."

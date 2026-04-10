@@ -41,6 +41,70 @@
       </section>
 
       <section class="card">
+        <h2>Step 2.5: Optional Verifier Program</h2>
+        <p class="subtitle">
+          Optional: attach a polynomial-time answer verifier after task creation. Disable for tasks without efficient verification.
+        </p>
+        <div class="grid">
+          <label>
+            Mode
+            <select id="verifierMode">
+              <option value="none">No verifier (disabled)</option>
+              <option value="custom-answer-js">Custom answer-array verifier (recommended)</option>
+              <option value="builtin">Built-in verifier</option>
+              <option value="custom-js">Custom JS verifier</option>
+            </select>
+          </label>
+          <label>
+            Built-in verifier
+            <select id="verifierId"></select>
+          </label>
+        </div>
+        <div id="customVerifierPanel" class="autoPanel" hidden>
+          <label>
+            Custom JS verifier code (must define <code>verify(instance, witness)</code>)
+            <textarea id="customVerifierCode" rows="10">function verify(instance, witness) {
+  const values = instance.values || [];
+  const target = instance.target;
+  const sum = (witness.indices || []).reduce((acc, idx) => acc + values[idx], 0);
+  return Math.abs(sum - target) < 1e-9;
+}</textarea>
+          </label>
+        </div>
+        <div id="answerVerifierPanel" class="autoPanel" hidden>
+          <label>
+            Answer-array verifier code (must define <code>verifyAnswer(answerArray)</code>)
+            <textarea id="answerVerifierCode" rows="8">function verifyAnswer(answerArray) {
+  return Array.isArray(answerArray) && answerArray.length === 1 && Number(answerArray[0]) === 25;
+}</textarea>
+          </label>
+        </div>
+        <div class="grid">
+          <label>
+            Instance JSON (int/float/array/object)
+            <textarea id="verifierInstance" rows="6">{"values":[3,34,4,12,5,2],"target":9}</textarea>
+          </label>
+          <label>
+            Witness JSON (int/float/array/object)
+            <textarea id="verifierWitness" rows="6">[2,4]</textarea>
+          </label>
+        </div>
+        <div class="autoRow">
+          <label class="checkRow">
+            <input id="attachVerifierToTask" type="checkbox" />
+            <span>Attach this verifier config to new task (optional)</span>
+          </label>
+          <label class="checkRow">
+            <input id="enforceVerifierOnSubmit" type="checkbox" />
+            <span>Enforce on submit (skip invalid witnesses)</span>
+          </label>
+        </div>
+        <button id="btnApplyVerifierToTask" class="primary" type="button">Apply Verifier Policy To Current Task</button>
+        <button id="btnRunVerifier" class="primary" type="button">Run Verifier</button>
+        <div id="verifierOut" class="out"></div>
+      </section>
+
+      <section class="card">
         <h2>Step 3: Contractors Submit Results</h2>
         <div class="grid">
           <label>
@@ -149,7 +213,7 @@
         <button id="btnResearch" class="primary">Run Research Benchmarks</button>
         <div class="kpiGrid">
           <div class="kpiBox"><div class="kpiLabel">M1 Avg Verify Gas Advantage</div><div id="kpiM1Gain" class="kpiValue">-</div></div>
-          <div class="kpiBox"><div class="kpiLabel">M2 Mean Encrypt+Proof (ms)</div><div id="kpiM2Mean" class="kpiValue">-</div></div>
+          <div class="kpiBox"><div class="kpiLabel">M2 Total Encrypt+Proof (ms)</div><div id="kpiM2Mean" class="kpiValue">-</div></div>
           <div class="kpiBox"><div class="kpiLabel">M3 Size Delta (canonical-old minus new)</div><div id="kpiM3Delta" class="kpiValue">-</div></div>
           <div class="kpiBox"><div class="kpiLabel">M4 EqTest Estimated Gas (single)</div><div id="kpiM4EqGas" class="kpiValue">-</div></div>
           <div class="kpiBox"><div class="kpiLabel">M6 R² (new)</div><div id="kpiM6R2New" class="kpiValue">-</div></div>

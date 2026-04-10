@@ -54,7 +54,7 @@ function nowStamp() {
 async function runM1M4M6(provider) {
   const rows = [];
   for (const n of N_VALUES) {
-    const run = await stepDeploy({ provider, maxContractors: n + 2 });
+    const run = await stepDeploy({ provider, maxContractors: n + 2, isolatedClient: true });
     const values = Array.from({ length: n }, (_, i) => (i % 3 === 0 ? 25 : i % 3 === 1 ? 25 : 30));
     await stepCreateTask({
       provider,
@@ -191,6 +191,9 @@ async function runM2() {
   return {
     iterations: ITERATIONS_M2,
     unavailable: false,
+    totalEncryptMs: encMs.reduce((a, b) => a + b, 0),
+    totalProofGenMs: proofMs.reduce((a, b) => a + b, 0),
+    totalEncryptPlusProofMs: totalMs.reduce((a, b) => a + b, 0),
     meanEncryptMs: mean(encMs),
     meanProofGenMs: mean(proofMs),
     meanEncryptPlusProofMs: mean(totalMs),
@@ -246,7 +249,7 @@ function runM3() {
 }
 
 async function runM5(provider) {
-  const run = await stepDeploy({ provider, maxContractors: 3 });
+  const run = await stepDeploy({ provider, maxContractors: 3, isolatedClient: true });
   await stepCreateTask({
     provider,
     run,
@@ -352,7 +355,7 @@ async function runM5(provider) {
 function buildHtml(report) {
   const m1Rows = report.M1.perN
     .map(
-      (r) => `<tr><td>${r.n}</td><td>${fmt(r.avgVerifyGasNew)}</td><td>${fmt(r.avgVerifyGasOld)}</td><td>${fmt(
+      (r) => `<tr><td>${r.n}</td><td>${fmt(r.totalSubmitGasNew)}</td><td>${fmt(r.totalSubmitGasOld)}</td><td>${fmt(
         r.eqTestEstimatedGasSingleExec
       )}</td><td>${r.eqTestPerCompareMs.toFixed(3)}</td></tr>`
     )
@@ -411,9 +414,9 @@ th{background:#f8fafc}.ok{color:#166534;font-weight:700}.bad{color:#b91c1c;font-
 <div class="card span2"><h3>M2 Proof Generation Time</h3><p>${
     report.M2.unavailable
       ? report.M2.note
-      : `Mean encrypt+proof: <b>${report.M2.meanEncryptPlusProofMs.toFixed(3)} ms</b><br/>P95: <b>${report.M2.p95EncryptPlusProofMs.toFixed(3)} ms</b><br/>Iterations: ${report.M2.iterations}`
+      : `Total encrypt+proof: <b>${report.M2.totalEncryptPlusProofMs.toFixed(3)} ms</b><br/>Total encrypt: <b>${report.M2.totalEncryptMs.toFixed(3)} ms</b><br/>Total proof: <b>${report.M2.totalProofGenMs.toFixed(3)} ms</b><br/>Iterations: ${report.M2.iterations}`
   }</p></div>
-<div class="card span4"><h3>M1 + M4 Table</h3><table><thead><tr><th>n (contractors)</th><th>Avg verify gas new</th><th>Avg verify gas old</th><th>EqTest exec gas (est)</th><th>EqTest ms/compare</th></tr></thead><tbody>${m1Rows}</tbody></table></div>
+<div class="card span4"><h3>M1 + M4 Table</h3><table><thead><tr><th>n (contractors)</th><th>Total submit gas new</th><th>Total submit gas old</th><th>EqTest exec gas (est)</th><th>EqTest ms/compare</th></tr></thead><tbody>${m1Rows}</tbody></table></div>
 <div class="card span4"><h3>M4 Latency Table</h3><table><thead><tr><th>n (contractors)</th><th>Batch latency (ms)</th><th>Per compare (ms)</th><th>EqTest exec gas (est)</th><th>EqTest tx gas incl 21k</th></tr></thead><tbody>${m4Rows}</tbody></table></div>
 <div class="card span4"><h3>M5 Security Tests</h3><p>Mode: <code>${report.M5.testMode || ""}</code></p><table><thead><tr><th>Variant</th><th>Expected</th><th>Observed</th><th>Tx hash</th><th>Result</th></tr></thead><tbody>${m5Rows}</tbody></table></div>
 </div>
@@ -422,8 +425,8 @@ const rows = ${JSON.stringify(report.M1.perN)};
 const eqRows = ${JSON.stringify(report.M4.perN)};
 new Chart(document.getElementById("m1Gas"),{
  type:"bar",
- data:{labels:rows.map(r=>String(r.n)),datasets:[{label:"New avg verify gas",data:rows.map(r=>r.avgVerifyGasNew)},{label:"Old avg verify gas",data:rows.map(r=>r.avgVerifyGasOld)}]},
- options:{scales:{x:{title:{display:true,text:"Number of contractors (n)"}},y:{title:{display:true,text:"Gas per submission verification"}}}}
+ data:{labels:rows.map(r=>String(r.n)),datasets:[{label:"New total submit gas",data:rows.map(r=>r.totalSubmitGasNew)},{label:"Old total submit gas",data:rows.map(r=>r.totalSubmitGasOld)}]},
+ options:{scales:{x:{title:{display:true,text:"Number of contractors (n)"}},y:{title:{display:true,text:"Total submit gas"}}}}
 });
 new Chart(document.getElementById("m6Linear"),{
  type:"line",
@@ -432,12 +435,12 @@ new Chart(document.getElementById("m6Linear"),{
 });
 new Chart(document.getElementById("m4Eq"),{
  type:"line",
- data:{labels:eqRows.map(r=>String(r.n)),datasets:[{label:"EqTest batch latency (ms)",data:eqRows.map(r=>r.eqTestBatchMs)},{label:"EqTest per-compare latency (ms)",data:eqRows.map(r=>r.eqTestPerCompareMs)}]},
+ data:{labels:eqRows.map(r=>String(r.n)),datasets:[{label:"EqTest total batch latency (ms)",data:eqRows.map(r=>r.eqTestBatchMs)}]},
  options:{scales:{x:{title:{display:true,text:"Number of contractors (n)"}},y:{type:"linear",position:"left",title:{display:true,text:"Latency (ms)"}}}}
 });
 new Chart(document.getElementById("m3Size"),{
  type:"bar",
- data:{labels:["New CT","Old repo payload","Old canonical pairing"],datasets:[{label:"Bytes",data:[${report.M3.newSchemeBytes.total},${report.M3.oldPairingBaselineRepoBytes.total},${report.M3.oldPairingBaselineCanonicalBytes.total}]}]},
+ data:{labels:["New CT","Old canonical pairing"],datasets:[{label:"Bytes",data:[${report.M3.newSchemeBytes.total},${report.M3.oldPairingBaselineCanonicalBytes.total}]}]},
  options:{scales:{x:{title:{display:true,text:"Scheme/baseline"}},y:{title:{display:true,text:"Ciphertext/proof payload size (bytes)"}}}}
 });
 </script>

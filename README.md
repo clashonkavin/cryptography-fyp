@@ -103,6 +103,18 @@ Then open `http://127.0.0.1:3000`.
 UI now includes a **Research Dashboard (M1-M6)** section with charts/KPIs and a one-click
 `Run Research Benchmarks` action for screenshot-ready outputs.
 
+UI also includes **Step 0: NP Verifier Program**:
+
+- choose a built-in verifier (`subset_sum`, `three_sat`, `hamiltonian_cycle`)
+- or provide custom JavaScript verifier code
+- submit `instance` and `witness` JSON using int/float/array/object values
+- receive validity result + runtime in milliseconds
+- optional toggle to attach verifier policy to task creation
+- optional enforcement mode: skip contractor submissions whose witness fails verification
+
+This verifier attachment is optional by design (useful for NP-style checks, but can be disabled for tasks
+that do not admit polynomial-time verification).
+
 ### CLI simulation
 
 ```bash
